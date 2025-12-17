@@ -143,7 +143,6 @@ namespace WPEFramework
                 {
                     LOGINFO("Initializing device manager");
                     device::Manager::Initialize();
-                    LOGINFO("device::Manager::Initialize done");
 
                     LOGINFO("Front panel init");
                     fpIndicators = device::FrontPanelConfig::getInstance().getIndicators();
