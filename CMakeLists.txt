@@ -45,7 +45,7 @@ if(RDK_SERVICE_L2_TEST)
 endif()
 
 if(PLUGIN_FRONTPANEL)
-    add_subdirectory(FrontPanel)
+    add_subdirectory(plugin)
 endif()
 
 if(WPEFRAMEWORK_CREATE_IPKG_TARGETS)
