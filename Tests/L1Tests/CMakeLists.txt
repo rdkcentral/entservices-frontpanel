@@ -101,12 +101,8 @@ macro(add_plugin_test plugin_name test_files)
     add_plugin_test_ex(${plugin_opt} "${test_files}" "../../${plugin_name}" "${NAMESPACE}${plugin_name}")
 endmacro()
 
-# PLUGIN_MOTION_DETECTION
-set (MOTION_DETECTION_INC ${CMAKE_SOURCE_DIR}/../entservices-peripherals/MotionDetection ${CMAKE_SOURCE_DIR}/../entservices-peripherals/helpers)
-add_plugin_test_ex(PLUGIN_MOTION_DETECTION tests/test_MotionDetection.cpp "${MOTION_DETECTION_INC}" "${NAMESPACE}MotionDetection")
-
 # PLUGIN_FRONTPANEL
-set (FRONTPANEL_INC ${CMAKE_SOURCE_DIR}/../entservices-peripherals/FrontPanel ${CMAKE_SOURCE_DIR}/../entservices-peripherals/helpers)
+set (FRONTPANEL_INC ${CMAKE_SOURCE_DIR}/../entservices-frontpanel/FrontPanel ${CMAKE_SOURCE_DIR}/../entservices-frontpanel/helpers)
 set (FRONTPANEL_LIBS ${NAMESPACE}FrontPanel ${NAMESPACE}FrontPanelImplementation)
 add_plugin_test_ex(PLUGIN_FRONTPANEL tests/test_FrontPanel.cpp "${FRONTPANEL_INC}" "${FRONTPANEL_LIBS}")
 
