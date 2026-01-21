@@ -6,7 +6,7 @@ GITHUB_WORKSPACE="${PWD}"
 ls -la ${GITHUB_WORKSPACE}
 ############################
 # Build entservices-frontpanel
-echo "buliding entservices-frontpanel"
+echo "building entservices-frontpanel"
 
 cd ${GITHUB_WORKSPACE}
 cmake -G Ninja -S "$GITHUB_WORKSPACE" -B build/entservices-frontpanel \
