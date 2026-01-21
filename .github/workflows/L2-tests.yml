@@ -583,7 +583,7 @@ jobs:
           rm -rf $(pwd)/rdkL2TestResults.json
           
       - name: Generate coverage
-        if: ${{ matrix.coverage == 'with-coverage' && !env.ACT }}
+        if: ${{ matrix.coverage == 'with-coverage' && !env.ACT && env.RDK_SERVICE_L2_TEST == 'ON'}}
         run: >
           cp $GITHUB_WORKSPACE/entservices-testframework/Tests/L2Tests/.lcovrc_l2 ~/.lcovrc
           &&
