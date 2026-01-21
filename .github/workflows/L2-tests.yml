@@ -611,7 +611,7 @@ jobs:
           filtered_coverage.info
 
       - name: Upload artifacts
-        if: ${{ !env.ACT }}
+        if: ${{ !env.ACT && env.RDK_SERVICE_L2_TEST == 'ON'}}
         uses: actions/upload-artifact@v4
         with:
           name: artifacts-L2-frontpanel
