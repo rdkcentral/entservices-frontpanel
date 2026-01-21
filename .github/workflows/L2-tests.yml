@@ -556,24 +556,22 @@ jobs:
           $GITHUB_WORKSPACE/entservices-testframework/Tests/L2Tests/pact/install-verifier-cli.sh
 
       - name: Run unit tests without valgrind
-        run: >
+        if: hashFiles('${{ github.workspace }}/install/usr/bin/RdkServicesL2Test') != ''
+        run: |
           PATH=$GITHUB_WORKSPACE/install/usr/bin:${PATH}
           LD_LIBRARY_PATH=$GITHUB_WORKSPACE/install/usr/lib:$GITHUB_WORKSPACE/install/usr/lib/wpeframework/plugins:${LD_LIBRARY_PATH}
           GTEST_OUTPUT="json:$(pwd)/rdkL2TestResults.json"
-          if [ -x "$GITHUB_WORKSPACE/install/usr/bin/RdkServicesL2Test" ]; then
           RdkServicesL2Test &&
           cp -rf $(pwd)/rdkL2TestResults.json $GITHUB_WORKSPACE/rdkL2TestResultsWithoutValgrind.json &&
           rm -rf $(pwd)/rdkL2TestResults.json
-          fi
-
+       
       - name: Run unit tests with valgrind
-        if: ${{ !env.ACT }}
+        if: ${{ !env.ACT && hashFiles('${{ github.workspace }}/install/usr/bin/RdkServicesL2Test') != '' }}
         run: >
           PATH=$GITHUB_WORKSPACE/install/usr/bin:${PATH}
           LD_LIBRARY_PATH=$GITHUB_WORKSPACE/install/usr/lib:$GITHUB_WORKSPACE/install/usr/lib/wpeframework/plugins:${LD_LIBRARY_PATH}
           GTEST_OUTPUT="json:$(pwd)/rdkL2TestResults.json"
-          if [ -x "$GITHUB_WORKSPACE/install/usr/bin/RdkServicesL2Test" ]; then
-            valgrind
+          valgrind
             --tool=memcheck
             --log-file=valgrind_log
             --leak-check=yes
@@ -583,8 +581,7 @@ jobs:
             RdkServicesL2Test &&
             cp -rf $(pwd)/rdkL2TestResults.json $GITHUB_WORKSPACE/rdkL2TestResultsWithValgrind.json &&
             rm -rf $(pwd)/rdkL2TestResults.json
-          fi
-
+          
       - name: Generate coverage
         if: ${{ matrix.coverage == 'with-coverage' && !env.ACT }}
         run: >
