@@ -561,12 +561,9 @@ jobs:
           LD_LIBRARY_PATH=$GITHUB_WORKSPACE/install/usr/lib:$GITHUB_WORKSPACE/install/usr/lib/wpeframework/plugins:${LD_LIBRARY_PATH}
           GTEST_OUTPUT="json:$(pwd)/rdkL2TestResults.json"
           if [ -x "$GITHUB_WORKSPACE/install/usr/bin/RdkServicesL2Test" ]; then
-            RdkServicesL2Test &&
-            cp -rf $(pwd)/rdkL2TestResults.json $GITHUB_WORKSPACE/rdkL2TestResultsWithoutValgrind.json &&
-            rm -rf $(pwd)/rdkL2TestResults.json
-          else
-            echo "RdkServicesL2Test not found or L2 tests are disabled. Skipping L2 test execution." &&
-            echo "[]" > $GITHUB_WORKSPACE/rdkL2TestResultsWithoutValgrind.json
+          RdkServicesL2Test &&
+          cp -rf $(pwd)/rdkL2TestResults.json $GITHUB_WORKSPACE/rdkL2TestResultsWithoutValgrind.json &&
+          rm -rf $(pwd)/rdkL2TestResults.json
           fi
 
       - name: Run unit tests with valgrind
@@ -586,9 +583,6 @@ jobs:
             RdkServicesL2Test &&
             cp -rf $(pwd)/rdkL2TestResults.json $GITHUB_WORKSPACE/rdkL2TestResultsWithValgrind.json &&
             rm -rf $(pwd)/rdkL2TestResults.json
-          else
-            echo "RdkServicesL2Test not found or L2 tests are disabled. Skipping L2 test execution." &&
-            echo "[]" > $GITHUB_WORKSPACE/rdkL2TestResultsWithValgrind.json
           fi
 
       - name: Generate coverage
