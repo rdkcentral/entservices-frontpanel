@@ -102,7 +102,7 @@ macro(add_plugin_test plugin_name test_files)
 endmacro()
 
 # PLUGIN_FRONTPANEL
-set (FRONTPANEL_INC ${CMAKE_SOURCE_DIR}/../entservices-frontpanel/plugin ${CMAKE_SOURCE_DIR}/../entservices-frontpanel/helpers)
+set (FRONTPANEL_INC ${CMAKE_SOURCE_DIR}/../plugin ${CMAKE_SOURCE_DIR}/../helpers)
 set (FRONTPANEL_LIBS ${NAMESPACE}FrontPanel ${NAMESPACE}FrontPanelImplementation)
 add_plugin_test_ex(PLUGIN_FRONTPANEL tests/test_FrontPanel.cpp "${FRONTPANEL_INC}" "${FRONTPANEL_LIBS}")
 
