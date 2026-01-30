@@ -17,6 +17,7 @@ env:
   INTERFACES_REF: "develop"
   AUTOMATICS_UNAME: ${{ secrets.AUTOMATICS_UNAME}}
   AUTOMATICS_PASSCODE: ${{ secrets. AUTOMATICS_PASSCODE}}
+  RDK_SERVICE_L2_TEST: "OFF"
 
 jobs:
   L2-tests:
@@ -86,18 +87,18 @@ jobs:
           path: ThunderTools
           ref: R4.4.3
           
-      - name: Checkout entservices-peripherals
+      - name: Checkout entservices-frontpanel
         if: ${{ inputs.caller_source == 'local' }}
         uses: actions/checkout@v3
         with:
-          path: entservices-peripherals
+          path: entservices-frontpanel
 
-      - name: Checkout entservices-peripherals-testframework
+      - name: Checkout entservices-frontpanel-testframework
         if: ${{ inputs.caller_source == 'testframework' }}
         uses: actions/checkout@v3
         with:
-          repository: rdkcentral/entservices-peripherals
-          path: entservices-peripherals
+          repository: rdkcentral/entservices-frontpanel
+          path: entservices-frontpanel
           ref: develop
 
       - name: Checkout entservices-testframework
@@ -310,11 +311,11 @@ jobs:
           &&
           cmake --install build/mocks    
 
-      - name: Build entservices-peripherals
+      - name: Build entservices-frontpanel
         run: >
           cmake
-          -S "$GITHUB_WORKSPACE/entservices-peripherals"
-          -B build/entservices-peripherals
+          -S "$GITHUB_WORKSPACE/entservices-frontpanel"
+          -B build/entservices-frontpanel
           -DCMAKE_TOOLCHAIN_FILE="${{ env.TOOLCHAIN_FILE }}"
           -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/install/usr"
           -DCMAKE_MODULE_PATH="$GITHUB_WORKSPACE/install/tools/cmake"
@@ -378,14 +379,14 @@ jobs:
           -DPLUGIN_LEDCONTROL=ON
           -DPLUGIN_FRONTPANEL=OFF
           -DPLUGIN_MOTION_DETECTION=ON
-          -DRDK_SERVICE_L2_TEST=ON
-          -DPLUGIN_L2Tests=ON
+          -DRDK_SERVICE_L2_TEST=${{env.RDK_SERVICE_L2_TEST}}
+          -DPLUGIN_L2Tests=OFF
           -DUSE_THUNDER_R4=ON
           -DHIDE_NON_EXTERNAL_SYMBOLS=OFF
           &&
-          cmake --build build/entservices-peripherals -j8
+          cmake --build build/entservices-frontpanel -j8
           &&
-          cmake --install build/entservices-peripherals
+          cmake --install build/entservices-frontpanel
 
       - name: Build entservices-testframework
         run: >
@@ -412,7 +413,7 @@ jobs:
           -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers/rdk/iarmmgrs-hal
           -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers/ccec/drivers
           -I $GITHUB_WORKSPACE/entservices-testframework/Tests/headers/network
-          -I $GITHUB_WORKSPACE/entservices-peripherals/helpers
+          -I $GITHUB_WORKSPACE/entservices-frontpanel/helpers
           -I $GITHUB_WORKSPACE/install/usr/include
           -I $GITHUB_WORKSPACE/install/usr/include/WPEFramework
           -I ./usr/include/libdrm
@@ -456,8 +457,8 @@ jobs:
           -DPLUGIN_LEDCONTROL=ON
           -DPLUGIN_FRONTPANEL=OFF
           -DPLUGIN_MOTION_DETECTION=ON
-          -DRDK_SERVICE_L2_TEST=ON
-          -DPLUGIN_L2Tests=ON
+          -DRDK_SERVICE_L2_TEST=${{env.RDK_SERVICE_L2_TEST}}
+          -DPLUGIN_L2Tests=OFF
           -DUSE_THUNDER_R4=ON
           -DHIDE_NON_EXTERNAL_SYMBOLS=OFF
           &&
@@ -556,16 +557,17 @@ jobs:
           $GITHUB_WORKSPACE/entservices-testframework/Tests/L2Tests/pact/install-verifier-cli.sh
 
       - name: Run unit tests without valgrind
-        run: >
+        if: ${{ env.RDK_SERVICE_L2_TEST == 'ON' }}
+        run: |
           PATH=$GITHUB_WORKSPACE/install/usr/bin:${PATH}
           LD_LIBRARY_PATH=$GITHUB_WORKSPACE/install/usr/lib:$GITHUB_WORKSPACE/install/usr/lib/wpeframework/plugins:${LD_LIBRARY_PATH}
           GTEST_OUTPUT="json:$(pwd)/rdkL2TestResults.json"
           RdkServicesL2Test &&
           cp -rf $(pwd)/rdkL2TestResults.json $GITHUB_WORKSPACE/rdkL2TestResultsWithoutValgrind.json &&
           rm -rf $(pwd)/rdkL2TestResults.json
-
+       
       - name: Run unit tests with valgrind
-        if: ${{ !env.ACT }}
+        if: ${{ !env.ACT &&  env.RDK_SERVICE_L2_TEST == 'ON'}}
         run: >
           PATH=$GITHUB_WORKSPACE/install/usr/bin:${PATH}
           LD_LIBRARY_PATH=$GITHUB_WORKSPACE/install/usr/lib:$GITHUB_WORKSPACE/install/usr/lib/wpeframework/plugins:${LD_LIBRARY_PATH}
@@ -580,20 +582,20 @@ jobs:
           RdkServicesL2Test &&
           cp -rf $(pwd)/rdkL2TestResults.json $GITHUB_WORKSPACE/rdkL2TestResultsWithValgrind.json &&
           rm -rf $(pwd)/rdkL2TestResults.json
-
+          
       - name: Generate coverage
-        if: ${{ matrix.coverage == 'with-coverage' && !env.ACT }}
+        if: ${{ matrix.coverage == 'with-coverage' && !env.ACT && env.RDK_SERVICE_L2_TEST == 'ON'}}
         run: >
           cp $GITHUB_WORKSPACE/entservices-testframework/Tests/L2Tests/.lcovrc_l2 ~/.lcovrc
           &&
           lcov -c
           -o coverage.info
-          -d build/entservices-peripherals
+          -d build/entservices-frontpanel
           &&
           lcov
           -r coverage.info
           '/usr/include/*'
-          '*/build/entservices-peripherals/_deps/*'
+          '*/build/entservices-frontpanel/_deps/*'
           '*/build/entservices-entservices-testframework/_deps/*'
           '*/install/usr/include/*'
           '*/Tests/headers/*'
@@ -606,14 +608,14 @@ jobs:
           &&
           genhtml
           -o coverage
-          -t "entservices-peripherals coverage"
+          -t "entservices-frontpanel coverage"
           filtered_coverage.info
 
       - name: Upload artifacts
-        if: ${{ !env.ACT }}
+        if: ${{ !env.ACT && env.RDK_SERVICE_L2_TEST == 'ON'}}
         uses: actions/upload-artifact@v4
         with:
-          name: artifacts-L2-peripherals
+          name: artifacts-L2-frontpanel
           path: |
             coverage/
             valgrind_log

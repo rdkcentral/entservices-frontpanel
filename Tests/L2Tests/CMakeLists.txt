@@ -21,14 +21,9 @@ set(MODULE_NAME ${NAMESPACE}${PLUGIN_NAME})
 set(THUNDER_PORT 9998)
 find_package(${NAMESPACE}Plugins REQUIRED)
 
-if(PLUGIN_LEDCONTROL)
-    set(SRC_FILES ${SRC_FILES} tests/LedControl_L2Test.cpp)
-endif()
-
-if(PLUGIN_FRONTPANEL)
+if(RDK_SERVICE_L2_TEST)
     set(SRC_FILES ${SRC_FILES} tests/FrontPanel_L2Test.cpp)
 endif()
-
 
 add_library(${MODULE_NAME} SHARED ${SRC_FILES})
 
