@@ -138,7 +138,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-frontpanel
           path: entservices-frontpanel
-          ref: feature/RDKEMW-12639
+          ref: feature/RDKEMW-12639_1
 
       - name: Checkout googletest
         if: steps.cache.outputs.cache-hit != 'true'
