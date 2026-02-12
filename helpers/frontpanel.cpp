@@ -73,6 +73,7 @@ namespace WPEFramework
         int CFrontPanel::initDone = 0;
         static bool isMessageLedOn = false;
         static bool isRecordLedOn = false;
+        static bool isFirstSetLEDAfterBootup = false;
 
         static bool powerStatus = false;     //Check how this works on xi3 and rng's
         static bool started = false;
@@ -176,7 +177,7 @@ namespace WPEFramework
                     globalLedBrightness = device::FrontPanelIndicator::getInstance("Power").getBrightness();
                     LOGINFO("Power light brightness, %d, power status %d", globalLedBrightness, powerStatus);
 
-		    profileType = searchRdkProfile();
+		    /*profileType = searchRdkProfile();
 		    if (TV != profileType)
 		    {
                         for (uint i = 0; i < fpIndicators.size(); i++)
@@ -194,7 +195,7 @@ namespace WPEFramework
 		    }
 
 		    if (powerStatus)
-                        device::FrontPanelIndicator::getInstance("Power").setState(true);
+                        device::FrontPanelIndicator::getInstance("Power").setState(true);*/
 
                 }
                 catch (...)
@@ -229,8 +230,8 @@ namespace WPEFramework
             LOGWARN("Front panel start");
             try
             {
-                if (powerStatus)
-                    device::FrontPanelIndicator::getInstance("Power").setState(true);
+                /*if (powerStatus)
+                    device::FrontPanelIndicator::getInstance("Power").setState(true);*/
 
                 device::List <device::FrontPanelIndicator> fpIndicators = device::FrontPanelConfig::getInstance().getIndicators();
                 for (uint i = 0; i < fpIndicators.size(); i++)
@@ -438,6 +439,12 @@ namespace WPEFramework
                 //brightness = properties["brightness"].Number();
                 getNumberParameter("brightness", brightness);
 
+            if (!isFirstSetLEDAfterBootup) {
+               LOGWARN("isFirstSetLEDAfterBootup setState(false)");
+               device::FrontPanelIndicator::getInstance("Power").setState(false);
+               isFirstSetLEDAfterBootup = true;
+            }
+
             unsigned int color = 0;
             if (parameters.HasLabel("color") && !parameters["color"].String().empty()) //color mode 2
             {
@@ -478,7 +485,8 @@ namespace WPEFramework
                 if (brightness == -1)
                     brightness = device::FrontPanelIndicator::getInstance(ledIndicator.c_str()).getBrightness(true);
 
-                device::FrontPanelIndicator::getInstance(ledIndicator.c_str()).setBrightness(brightness, false);
+                LOGWARN("setLed brightness: %d", brightness);
+		device::FrontPanelIndicator::getInstance(ledIndicator.c_str()).setBrightness(brightness, false);
                 success = true;
             }
             catch (...)
