@@ -29,6 +29,7 @@
 
 #include "UtilsJsonRpc.h"
 #include "UtilsIarm.h"
+#include <stdio.h>
 
 #define SERVICE_NAME "FrontPanelService"
 #define METHOD_FP_SET_BRIGHTNESS "setBrightness"
@@ -109,6 +110,8 @@ namespace
         JsonObject returnResult;
         int levels=0, min=0, max=0;
         string range;
+
+        printf("Test coverity %s\n");
 
         indicator.getBrightnessLevels(levels, min, max);
         range = "int";

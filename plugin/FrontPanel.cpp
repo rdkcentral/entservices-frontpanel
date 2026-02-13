@@ -26,6 +26,8 @@
 #include "UtilsJsonRpc.h"
 #include "UtilsIarm.h"
 
+#include <stdio.h>
+
 #define API_VERSION_NUMBER_MAJOR 1
 #define API_VERSION_NUMBER_MINOR 0
 #define API_VERSION_NUMBER_PATCH 6
@@ -70,6 +72,7 @@ namespace WPEFramework
                 _frontPanel->Configure(service);
                 Exchange::JFrontPanel::Register(*this, _frontPanel);
                 LOGINFO("HdmiCecSource plugin is available. Successfully activated FrontPanel Plugin");
+                printf("Test coverity %s\n");
             }
             else
             {
