@@ -1,0 +1,40 @@
+name: Build frontpanel Component in Native Environment
+
+on:
+  push:
+    branches: [ main, 'sprint/**', 'release/**', develop, topic/RDKEMW-13481 ]
+  pull_request:
+    branches: [ main, 'sprint/**', 'release/**', topic/RDK*, develop ]
+
+jobs:
+  build-frontpanel-on-pr:
+    name: Build entservices-frontpanel component in github rdkcentral
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/rdkcentral/docker-rdk-ci:latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install system dependencies
+        run: |
+          apt update
+          apt install -y libsqlite3-dev libcurl4-openssl-dev valgrind lcov clang libsystemd-dev libboost-all-dev libwebsocketpp-dev meson libcunit1 libcunit1-dev curl protobuf-compiler-grpc libgrpc-dev libgrpc++-dev libunwind-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+          pip install jsonref
+
+      - name: native build
+        run: |
+          git config --global --add safe.directory '*'
+          git submodule update --init --recursive --remote
+          echo "GITHUB_TOKEN is set: $([ -n "$GITHUB_TOKEN" ] && echo 'YES' || echo 'NO')"
+          export BUILD_DIR=$HOME/build
+          echo "BUILD_DIR: $BUILD_DIR"
+          chmod +x build_tools_workflows/cov_docker_script/setup_dependencies.sh
+          ./build_tools_workflows/cov_docker_script/setup_dependencies.sh ./cov_docker_script/component_config.json
+          chmod +x build_tools_workflows/cov_docker_script/build_native.sh
+          ./build_tools_workflows/cov_docker_script/build_native.sh ./cov_docker_script/component_config.json "$(pwd)"
+        env:
+          GITHUB_TOKEN: ${{ secrets.RDKCM_RDKE }}
+
+

@@ -1,0 +1,121 @@
+{
+  "_comment": "Component Build Configuration for Coverity/Native Builds",
+  "_version": "2.0",
+  "_description": "Defines dependencies and build settings for the entservices-frontpanel component",
+  
+  "dependencies": {
+    "_comment": "External repositories needed by this component",
+    "repos": [
+      {
+        "name": "entservices-testframework",
+        "repo": "https://github.com/rdkcentral/entservices-testframework.git",
+        "branch": "develop"
+      },
+      {
+        "name": "trower-base64",
+        "repo": "https://github.com/xmidt-org/trower-base64.git",
+        "branch": "main",
+        "build": {
+          "type": "commands",
+          "commands": [
+            "meson setup --warnlevel 3 --werror build",
+            "ninja -C build",
+            "ninja -C build install"
+          ]
+        }
+      },
+      {
+        "name": "ThunderTools",
+        "repo": "https://github.com/rdkcentral/ThunderTools.git",
+        "branch": "R4.4.3",
+        "source_patches": [
+          {
+            "file": ".",
+            "type": "patch_file",
+            "patch_file": "$BUILD_DIR/entservices-testframework/patches/00010-R4.4-Add-support-for-project-dir.patch"
+          }
+        ],
+        "build": {
+          "type": "cmake",
+          "build_dir": "build",
+          "cmake_flags": "-DCMAKE_INSTALL_PREFIX=$HOME/usr -DCMAKE_MODULE_PATH=$HOME/usr/tools/cmake -DGENERIC_CMAKE_MODULE_PATH=$HOME/usr/tools/cmake -DEXCEPTIONS_ENABLE=ON",
+          "make_targets": ["all", "install"]
+        }
+      },
+      {
+        "name": "Thunder",
+        "repo": "https://github.com/rdkcentral/Thunder.git",
+        "branch": "R4.4.1",
+        "source_patches": [
+          {
+            "file": ".",
+            "type": "patch_file",
+            "patch_file": "$BUILD_DIR/entservices-testframework/patches/Use_Legact_Alt_Based_On_ThunderTools_R4.4.3.patch"
+          },
+          {
+            "file": ".",
+            "type": "patch_file",
+            "patch_file": "$BUILD_DIR/entservices-testframework/patches/error_code_R4_4.patch"
+          },
+          {
+            "file": ".",
+            "type": "patch_file",
+            "patch_file": "$BUILD_DIR/entservices-testframework/patches/1004-Add-support-for-project-dir.patch"
+          },
+          {
+            "file": ".",
+            "type": "patch_file",
+            "patch_file": "$BUILD_DIR/entservices-testframework/patches/RDKEMW-733-Add-ENTOS-IDS.patch"
+          },
+          {
+            "file": ".",
+            "type": "patch_file",
+            "patch_file": "$BUILD_DIR/entservices-testframework/patches/Jsonrpc_dynamic_error_handling.patch"
+          }
+        ],
+        "build": {
+          "type": "cmake",
+          "build_dir": "build",
+          "cmake_flags": "-DCMAKE_INSTALL_PREFIX=$HOME/usr -DCMAKE_PREFIX_PATH=$HOME/usr -DCMAKE_MODULE_PATH=$HOME/usr/tools/cmake -DGENERIC_CMAKE_MODULE_PATH=$HOME/usr/tools/cmake -DMESSAGING=ON -DBUILD_TYPE=Debug -DBINDING=127.0.0.1 -DPORT=55555 -DEXCEPTIONS_ENABLE=ON",
+          "make_targets": ["all", "install"]
+        }
+      },
+      {
+        "name": "entservices-apis",
+        "repo": "https://github.com/rdkcentral/entservices-apis.git",
+        "branch": "main",
+        "build": {
+          "type": "cmake",
+          "build_dir": "build",
+          "cmake_flags": "-DCMAKE_INSTALL_PREFIX=$HOME/usr -DCMAKE_PREFIX_PATH=$HOME/usr -DCMAKE_MODULE_PATH=$HOME/usr/tools/cmake",
+          "make_targets": ["all", "install"],
+          "pre_build_commands": [
+            "rm -f jsonrpc/DTV.json"
+          ]
+        }
+      }
+    ]
+  },
+  
+  "native_component": {
+    "_comment": "Configuration for the main component being built",
+    "name": "entservices-frontpanel",
+    "pre_build_commands": [
+      {
+        "description": "Create empty mock headers in testframework",
+        "command": "cd $BUILD_DIR/entservices-testframework/Tests && mkdir -p headers/audiocapturemgr headers/ccec/drivers headers/rdk/ds headers/rdk/iarmbus headers/rdk/iarmmgrs-hal headers/rdk/halif/deepsleep-manager headers/network headers/proc && cd headers && touch audiocapturemgr/audiocapturemgr_iarm.h ccec/drivers/CecIARMBusMgr.h rdk/ds/audioOutputPort.hpp rdk/ds/compositeIn.hpp rdk/ds/dsDisplay.h rdk/ds/dsError.h rdk/ds/dsMgr.h rdk/ds/dsTypes.h rdk/ds/dsUtl.h rdk/ds/exception.hpp rdk/ds/hdmiIn.hpp rdk/ds/host.hpp rdk/ds/list.hpp rdk/ds/manager.hpp rdk/ds/sleepMode.hpp rdk/ds/videoDevice.hpp rdk/ds/videoOutputPort.hpp rdk/ds/videoOutputPortConfig.hpp rdk/ds/videoOutputPortType.hpp rdk/ds/videoResolution.hpp rdk/iarmbus/libIARM.h rdk/iarmbus/libIBus.h rdk/iarmbus/libIBusDaemon.h rdk/halif/deepsleep-manager/deepSleepMgr.h rdk/iarmmgrs-hal/mfrMgr.h rdk/iarmmgrs-hal/pwrMgr.h rdk/iarmmgrs-hal/sysMgr.h network/wifiSrvMgrIarmIf.h network/netsrvmgrIarm.h libudev.h rfcapi.h rbus.h telemetry_busmessage_sender.h maintenanceMGR.h pkg.h edid-parser.hpp secure_wrapper.h wpa_ctrl.h proc/readproc.h btmgr.h rdk_logger_milestone.h audioOutputPortType.hpp audioOutputPortConfig.hpp tr181api.h dsRpc.h"
+      },
+      {
+        "description": "Copy system headers (gstreamer, glib, trower-base64)",
+        "command": "cp -r /usr/include/gstreamer-1.0/gst /usr/include/glib-2.0/* /usr/lib/x86_64-linux-gnu/glib-2.0/include/* /usr/local/include/trower-base64/base64.h ."
+      }
+    ],
+    "build": {
+      "type": "cmake",
+      "build_dir": "build",
+      "cmake_flags": "-DUSE_THUNDER_R4=ON -DCMAKE_INSTALL_PREFIX=$COMPONENT_DIR/install/usr -DCMAKE_PREFIX_PATH=$HOME/usr -DCMAKE_MODULE_PATH=$HOME/usr/tools/cmake -DCMAKE_VERBOSE_MAKEFILE=ON -DCMAKE_DISABLE_FIND_PACKAGE_IARMBus=ON -DCMAKE_DISABLE_FIND_PACKAGE_RFC=ON -DCMAKE_DISABLE_FIND_PACKAGE_DS=ON -DCOMCAST_CONFIG=OFF -DRDK_SERVICES_COVERITY=ON -DRDK_SERVICES_L1_TEST=ON -DDS_FOUND=ON -DPLUGIN_FRONTPANEL=ON -DCMAKE_CXX_FLAGS=\"-DEXCEPTIONS_ENABLE=ON -I$BUILD_DIR/entservices-testframework/Tests/headers -I$BUILD_DIR/entservices-testframework/Tests/headers/audiocapturemgr -I$BUILD_DIR/entservices-testframework/Tests/headers/rdk/ds -I$BUILD_DIR/entservices-testframework/Tests/headers/rdk/iarmbus -I$BUILD_DIR/entservices-testframework/Tests/headers/rdk/iarmmgrs-hal -I$BUILD_DIR/entservices-testframework/Tests/headers/ccec/drivers -I$BUILD_DIR/entservices-testframework/Tests/headers/network -I$BUILD_DIR/entservices-testframework/Tests/mocks -I$BUILD_DIR/entservices-testframework/Tests/mocks/libusb -I$BUILD_DIR/entservices-testframework/Tests/mocks/thunder -I/usr/include/libdrm -include $BUILD_DIR/entservices-testframework/Tests/mocks/devicesettings.h -include $BUILD_DIR/entservices-testframework/Tests/mocks/Iarm.h -include $BUILD_DIR/entservices-testframework/Tests/mocks/Rfc.h -include $BUILD_DIR/entservices-testframework/Tests/mocks/RBus.h -include $BUILD_DIR/entservices-testframework/Tests/mocks/Telemetry.h -include $BUILD_DIR/entservices-testframework/Tests/mocks/Udev.h -include $BUILD_DIR/entservices-testframework/Tests/mocks/pkg.h -include $BUILD_DIR/entservices-testframework/Tests/mocks/maintenanceMGR.h -include $BUILD_DIR/entservices-testframework/Tests/mocks/secure_wrappermock.h -Wall -Werror -Wno-error=format -Wl,-wrap,system -Wl,-wrap,popen -Wl,-wrap,syslog -DENABLE_TELEMETRY_LOGGING -DUSE_IARMBUS -DENABLE_SYSTEM_GET_STORE_DEMO_LINK -DENABLE_DEEP_SLEEP -DENABLE_SET_WAKEUP_SRC_CONFIG -DENABLE_THERMAL_PROTECTION -DUSE_DRM_SCREENCAPTURE -DHAS_API_SYSTEM -DHAS_API_POWERSTATE -DHAS_RBUS -DDISABLE_SECURITY_TOKEN -DENABLE_DEVICE_MANUFACTURER_INFO -DUSE_THUNDER_R4=ON -DTHUNDER_VERSION=4 -DTHUNDER_VERSION_MAJOR=4 -DTHUNDER_VERSION_MINOR=4\"",
+      "parallel_make": true
+    }
+  }
+}
+
