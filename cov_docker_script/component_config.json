@@ -107,7 +107,7 @@
       },
       {
         "description": "Create IARM header redirects",
-        "command": "cd $BUILD_DIR/entservices-testframework/Tests/headers && { echo '#ifndef _LIB_IARM_H'; echo '#define _LIB_IARM_H'; echo '#include \"../mocks/Iarm.h\"'; echo '#endif'; } > libIARM.h && { echo '#ifndef _LIB_IBUS_H'; echo '#define _LIB_IBUS_H'; echo '#include \"../mocks/Iarm.h\"'; echo '#endif'; } > libIBus.h && { echo '#ifndef _LIB_IBUS_DAEMON_H'; echo '#define _LIB_IBUS_DAEMON_H'; echo '#include \"../mocks/Iarm.h\"'; echo '#endif'; } > libIBusDaemon.h && ls -la libIARM.h libIBus.h libIBusDaemon.h && cat libIARM.h"
+        "command": "cd $BUILD_DIR/entservices-testframework/Tests/headers && printf '%s\\n' '#ifndef _LIB_IARM_H' '#define _LIB_IARM_H' '#include \"../mocks/Iarm.h\"' '#endif' > libIARM.h && printf '%s\\n' '#ifndef _LIB_IBUS_H' '#define _LIB_IBUS_H' '#include \"../mocks/Iarm.h\"' '#endif' > libIBus.h && printf '%s\\n' '#ifndef _LIB_IBUS_DAEMON_H' '#define _LIB_IBUS_DAEMON_H' '#include \"../mocks/Iarm.h\"' '#endif' > libIBusDaemon.h && echo '=== Created IARM headers ===' && ls -la libIARM.h libIBus.h libIBusDaemon.h && echo '=== Content of libIARM.h ===' && cat libIARM.h"
       },
       {
         "description": "Copy system headers (gstreamer, glib, trower-base64)",
