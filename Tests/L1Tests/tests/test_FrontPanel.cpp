@@ -149,7 +149,8 @@ protected:
         p_managerImplMock  = new testing::NiceMock <ManagerImplMock>;
         device::Manager::setImpl(p_managerImplMock);
         EXPECT_CALL(*p_managerImplMock, Initialize())
-            .Times(1);
+            .Times(1)
+            .WillOnce(::testing::Return());
 
         p_iarmBusImplMock  = new testing::NiceMock <IarmBusImplMock>;
         IarmBus::setImpl(p_iarmBusImplMock);
@@ -190,7 +191,8 @@ protected:
         device::FrontPanelTextDisplay::getInstance().FrontPanelIndicator::impl = nullptr;
 
         EXPECT_CALL(*p_managerImplMock, DeInitialize())
-            .Times(1);
+            .Times(1)
+            .WillOnce(::testing::Return());
 
         plugin->Deinitialize(&service);
 
