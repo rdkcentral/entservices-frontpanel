@@ -37,6 +37,7 @@
 #include "ServiceMock.h"
 #include "ColorMock.h"
 #include "PowerManagerMock.h"
+#include "ManagerMock.h"
 #include "ThunderPortability.h"
 
 using namespace WPEFramework;
@@ -132,6 +133,7 @@ protected:
 class FrontPanelInitializedTest : public FrontPanelTest {
 protected:
     IarmBusImplMock   *p_iarmBusImplMock = nullptr ;
+    ManagerImplMock   *p_managerImplMock = nullptr ;
     FrontPanelConfigMock   *p_frontPanelConfigImplMock = nullptr;
     FrontPanelTextDisplayMock   *p_frontPanelTextDisplayMock = nullptr;
     FrontPanelIndicatorMock *p_frontPanelIndicatorMock = nullptr;
@@ -143,6 +145,11 @@ protected:
     FrontPanelInitializedTest()
         : FrontPanelTest()
     {
+
+        p_managerImplMock  = new testing::NiceMock <ManagerImplMock>;
+        device::Manager::setImpl(p_managerImplMock);
+        EXPECT_CALL(*p_managerImplMock, Initialize())
+            .Times(1);
 
         p_iarmBusImplMock  = new testing::NiceMock <IarmBusImplMock>;
         IarmBus::setImpl(p_iarmBusImplMock);
@@ -182,6 +189,9 @@ protected:
         device::FrontPanelIndicator::getInstance().impl = nullptr;
         device::FrontPanelTextDisplay::getInstance().FrontPanelIndicator::impl = nullptr;
 
+        EXPECT_CALL(*p_managerImplMock, DeInitialize())
+            .Times(1);
+
         plugin->Deinitialize(&service);
 
         //delete Plugin::CFrontPanel::instance(&service);
@@ -191,6 +201,12 @@ protected:
 
         //Clearing out out of scope variables, and setting initDone to 0.
         Plugin::CFrontPanel::initDone = 0;
+        device::Manager::setImpl(nullptr);
+        if (p_managerImplMock != nullptr)
+        {
+            delete p_managerImplMock;
+            p_managerImplMock = nullptr;
+        }
         IarmBus::setImpl(nullptr);
         if (p_iarmBusImplMock != nullptr)
         {
