@@ -176,6 +176,12 @@ protected:
         ON_CALL(*p_frontPanelConfigImplMock, getIndicators())
             .WillByDefault(::testing::Return(device::List<device::FrontPanelIndicator>({ device::FrontPanelIndicator::getInstance() })));
 
+        ON_CALL(service, QueryInterfaceByCallsign(::testing::_, ::testing::StrEq("org.rdk.PowerManager")))
+            .WillByDefault(::testing::Invoke(
+                [&](const uint32_t interfaceId, const string& name) -> void* {
+                    return PowerManagerMock::Get();
+                }));
+
         EXPECT_CALL(PowerManagerMock::Mock(), Register(::testing::Matcher<Exchange::IPowerManager::IModeChangedNotification*>(::testing::_)))
             .WillOnce(
                 [this](IPowerManager::IModeChangedNotification* notification) -> uint32_t {
