@@ -141,6 +141,9 @@ namespace WPEFramework
 #ifdef USE_DS
                 try
                 {
+                    LOGINFO("Initializing device manager");
+                    device::Manager::Initialize();
+
                     LOGINFO("Front panel init");
                     fpIndicators = device::FrontPanelConfig::getInstance().getIndicators();
 
@@ -221,6 +224,17 @@ namespace WPEFramework
                 delete s_instance;
                 s_instance = nullptr;
             }
+#ifdef USE_DS
+            try
+            {
+                device::Manager::DeInitialize();
+                LOGINFO("device::Manager::DeInitialize success");
+            }
+            catch(const std::exception& e)
+            {
+                LOGERR("device::Manager::DeInitialize failed, Exception: {%s}", e.what());
+            }
+#endif
             initDone = 0;
         }
 
