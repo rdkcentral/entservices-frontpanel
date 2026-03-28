@@ -235,7 +235,7 @@ namespace WPEFramework
                     ok = false;
                 }
             }
-            else if (brightness >= 0 && brightness <= 100)
+            else if (brightness <= 100)
             {
                 LOGWARN("calling setBrightness");
                 ok = CFrontPanel::instance()->setBrightness(brightness);
@@ -350,7 +350,7 @@ namespace WPEFramework
             {
                 string IndicatorNameIarm = fpIndicators.at(i).getName();
                 string MappedName = iarm2svc(IndicatorNameIarm);
-                if (MappedName != IndicatorNameIarm) lights.push_back(MappedName);
+                if (MappedName != IndicatorNameIarm) lights.push_back(std::move(MappedName));
             }
             return lights;
         }
@@ -405,7 +405,7 @@ namespace WPEFramework
             JsonObject info = getFrontPanelLightsInfo();
             string infoStr;
             info.ToString(infoStr);
-            supportedLightsInfo = infoStr;
+            supportedLightsInfo = std::move(infoStr);
             success = true;
 
             supportedLights = (Core::Service<RPC::IteratorType<Exchange::IFrontPanel::IFrontPanelLightsListIterator>>::Create<Exchange::IFrontPanel::IFrontPanelLightsListIterator>(frontPanelLights));
