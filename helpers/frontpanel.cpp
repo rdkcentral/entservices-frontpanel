@@ -456,6 +456,12 @@ namespace WPEFramework
             if (parameters.HasLabel("color") && !parameters["color"].String().empty()) //color mode 2
             {
                 string colorString = parameters["color"].String();
+				// Trim
+                const char* ws = " \t\n\r\f\v";
+                colorString.erase(0, colorString.find_first_not_of(ws));
+                colorString.erase(colorString.find_last_not_of(ws) + 1);
+                // Uppercase (device layer often expects fixed uppercase tokens)
+                std::transform(colorString.begin(), colorString.end(), colorString.begin(), [](unsigned char c){ return static_cast<char>(std::toupper(c)); });
 				LOGWARN("setLED: setColor attempt ledIndicator=%s color='%s' (len=%zu)", ledIndicator.c_str(), colorString.c_str(), colorString.length());
                 try
                 {
@@ -463,11 +469,13 @@ namespace WPEFramework
 					LOGWARN("setLED: setColor success ledIndicator=%s color='%s'", ledIndicator.c_str(), colorString.c_str());
                     success = true;
                 }
-                catch (...)
+                catch (const std::exception& e)
                 {
-					LOGERR("setLED: setColor FAILED ledIndicator=%s color='%s' (exception swallowed)", ledIndicator.c_str(), colorString.c_str());
+					LOGERR("setLED: setColor FAILED ledIndicator=%s color='%s' ex='%s'", ledIndicator.c_str(), colorString.c_str(), e.what());
                     success = false;
-                }
+                } catch (...) {
+                   LOGERR("setLED: setColor FAILED ledIndicator=%s color='%s' (unknown ex)", ledIndicator.c_str(), colorString.c_str());
+                   success = false;  
             }
             else if (parameters.HasLabel("red")) //color mode 1
             {
