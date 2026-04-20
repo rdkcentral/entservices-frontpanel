@@ -476,6 +476,7 @@ namespace WPEFramework
                 } catch (...) {
                    LOGERR("setLED: setColor FAILED ledIndicator=%s color='%s' (unknown ex)", ledIndicator.c_str(), colorString.c_str());
                    success = false;  
+				}
             }
             else if (parameters.HasLabel("red")) //color mode 1
             {
