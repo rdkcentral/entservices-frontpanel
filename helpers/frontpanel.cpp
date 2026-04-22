@@ -458,7 +458,7 @@ namespace WPEFramework
                 string colorString = parameters["color"].String();
                 try
                 {
-                    device::FrontPanelIndicator::getInstance(ledIndicator.c_str()).setColor(device::FrontPanelIndicator::Color::getInstance(colorString.c_str()), false);
+                    //device::FrontPanelIndicator::getInstance(ledIndicator.c_str()).setColor(device::FrontPanelIndicator::Color::getInstance(colorString.c_str()), false);
                     success = true;
                 }
                 catch (...)
