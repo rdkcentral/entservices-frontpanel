@@ -465,7 +465,7 @@ namespace WPEFramework
 				LOGWARN("setLED: setColor attempt ledIndicator=%s color='%s' (len=%zu)", ledIndicator.c_str(), colorString.c_str(), colorString.length());
                 try
                 {
-                    device::FrontPanelIndicator::getInstance(ledIndicator.c_str()).setColor(device::FrontPanelIndicator::Color::getInstance(colorString.c_str()), false);
+                    //device::FrontPanelIndicator::getInstance(ledIndicator.c_str()).setColor(device::FrontPanelIndicator::Color::getInstance(colorString.c_str()), false);
 					LOGWARN("setLED: setColor success ledIndicator=%s color='%s'", ledIndicator.c_str(), colorString.c_str());
                     success = true;
                 }
