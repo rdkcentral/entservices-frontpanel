@@ -463,12 +463,7 @@ namespace WPEFramework
 					LOGWARN("setLED: setColor success ledIndicator=%s color='%s'", ledIndicator.c_str(), colorString.c_str());
                     success = true;
                 }
-                catch (const std::exception& e)
-                {
-					LOGERR("setLED: setColor FAILED ledIndicator=%s color='%s' ex='%s'", ledIndicator.c_str(), colorString.c_str(), e.what());
-                    success = false;
-                } catch (...) {
-                   LOGERR("setLED: setColor FAILED ledIndicator=%s color='%s' (unknown ex)", ledIndicator.c_str(), colorString.c_str());
+                catch (...) {
                    success = false;  
 				}
             }
