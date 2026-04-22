@@ -463,7 +463,8 @@ namespace WPEFramework
 					LOGWARN("setLED: setColor success ledIndicator=%s color='%s'", ledIndicator.c_str(), colorString.c_str());
                     success = true;
                 }
-                catch (...) {
+                catch (...) 
+				{
                    success = false;  
 				}
             }
