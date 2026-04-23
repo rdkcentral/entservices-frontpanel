@@ -69,7 +69,7 @@ namespace WPEFramework
             {
                 _frontPanel->Configure(service);
                 Exchange::JFrontPanel::Register(*this, _frontPanel);
-                LOGINFO("HdmiCecSource plugin is available. Successfully activated FrontPanel Plugin");
+                LOGINFO("HdmiCecSource plugin is available. Successfully activated FrontPanel Plugin %s");
             }
             else
             {
