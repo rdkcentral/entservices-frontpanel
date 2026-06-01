@@ -30,7 +30,8 @@ add_library(${MODULE_NAME} SHARED
 add_library(${PLUGIN_IMPLEMENTATION} SHARED
         FrontPanelImplementation.cpp
         Module.cpp
-        ../helpers/frontpanel.cpp)
+        ../helpers/frontpanel.cpp
+        ../helpers/FrontPanelConfigStore.cpp)
 
 set_target_properties(${MODULE_NAME} PROPERTIES
         CXX_STANDARD 11
@@ -39,7 +40,7 @@ set_target_properties(${MODULE_NAME} PROPERTIES
 set_target_properties(${PLUGIN_IMPLEMENTATION} PROPERTIES
         CXX_STANDARD 11
         CXX_STANDARD_REQUIRED YES)
-set_source_files_properties(FrontPanel.cpp FrontPanelImplementation.cpp ../helpers/frontpanel.cpp PROPERTIES COMPILE_FLAGS "-fexceptions")
+set_source_files_properties(FrontPanel.cpp FrontPanelImplementation.cpp ../helpers/frontpanel.cpp ../helpers/FrontPanelConfigStore.cpp PROPERTIES COMPILE_FLAGS "-fexceptions")
 
 if (RDK_SERVICE_L2_TEST)
    find_library(TESTMOCKLIB_LIBRARIES NAMES TestMocklib)

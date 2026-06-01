@@ -20,12 +20,12 @@
 #pragma once
 
 #include <mutex>
+#include <unordered_map>
 #include "Module.h"
-#include "libIARM.h"
-#include "frontpanel.h"
 #include <interfaces/IPowerManager.h>
 #include "PowerManagerInterface.h"
 #include <interfaces/IFrontPanel.h>
+#include <interfaces/IDeviceSettingsFPD.h>
 
 using namespace WPEFramework;
 using PowerState = WPEFramework::Exchange::IPowerManager::PowerState;
@@ -33,6 +33,7 @@ using ThermalTemperature = WPEFramework::Exchange::IPowerManager::ThermalTempera
 
 #define DATA_LED  "data_led"
 #define RECORD_LED "record_led"
+#define POWER_LED "power_led"
 
 
 namespace WPEFramework {
@@ -93,8 +94,9 @@ namespace WPEFramework {
 
             std::vector<string> getFrontPanelLights();
             JsonObject getFrontPanelLightsInfo();
-            void setBlink(const JsonObject& blinkInfo);
             void InitializePowerManager(PluginHost::IShell *service);
+            void ReleaseDeviceSettings();
+            bool RefreshFrontPanelConfig();
 
 
             //Begin methods
@@ -121,13 +123,27 @@ namespace WPEFramework {
         public:
             static FrontPanelImplementation* _instance;
         private:
+            struct IndicatorConfig {
+                Exchange::IDeviceSettingsFPD::FPDIndicator indicator;
+                int32_t minBrightness;
+                int32_t maxBrightness;
+                int32_t levels;
+                int32_t colorMode;
+                std::vector<uint32_t> colors;
+            };
+
             static int m_LedDisplayPatternUpdateTimerInterval;
 
             bool           m_runUpdateTimer;
             std::mutex      m_updateTimerMutex;
+            std::mutex      _configMutex;
             PowerManagerInterfaceRef _powerManagerPlugin;
             Core::Sink<PowerManagerNotification> _pwrMgrNotification;
             bool _registeredEventHandlers;
+            Exchange::IDeviceSettingsFPD* _deviceSettingsFPD;
+            std::vector<string> _supportedLights;
+            std::unordered_map<string, IndicatorConfig> _indicatorConfigByName;
+            std::unordered_map<int32_t, uint32_t> _colorValueById;
 
         };
 
