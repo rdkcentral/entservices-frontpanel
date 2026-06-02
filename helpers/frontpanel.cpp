@@ -66,6 +66,7 @@ namespace WPEFramework
     namespace Plugin
     {
         CFrontPanel* CFrontPanel::s_instance = NULL;
+        PluginHost::IShell* CFrontPanel::m_service = nullptr;
         static int globalLedBrightness = 100;
 
         int CFrontPanel::initDone = 0;
@@ -172,19 +173,38 @@ namespace WPEFramework
         {
         }
 
+        bool CFrontPanel::EnsureDeviceSettingsFPD()
+        {
+            if (_deviceSettingsFPD != nullptr) {
+                return true;
+            }
+
+            if (m_service == nullptr) {
+                return false;
+            }
+
+            _deviceSettingsFPD = m_service->QueryInterfaceByCallsign<Exchange::IDeviceSettingsFPD>(DEVICESETTINGS_CALLSIGN);
+            if (_deviceSettingsFPD == nullptr) {
+                LOGWARN("Failed to query DeviceSettings interface from callsign: %s", DEVICESETTINGS_CALLSIGN);
+            }
+
+            return (_deviceSettingsFPD != nullptr);
+        }
+
         CFrontPanel* CFrontPanel::instance(PluginHost::IShell *service)
         {
             if (!initDone)
             {
                 if (nullptr != service)
                 {
+                    m_service = service;
                     _powerManagerPlugin = PowerManagerInterfaceBuilder(_T("org.rdk.PowerManager"))
                                       .withIShell(service)
                                       .withRetryIntervalMS(200)
                                       .withRetryCount(25)
                                       .createInterface();
 
-                    _deviceSettingsFPD = service->QueryInterfaceByCallsign<Exchange::IDeviceSettingsFPD>(DEVICESETTINGS_CALLSIGN);
+                    EnsureDeviceSettingsFPD();
                 }
                 if (!s_instance)
                     s_instance = new CFrontPanel;
@@ -192,7 +212,7 @@ namespace WPEFramework
                 try
                 {
                     fpIndicators.clear();
-                    if (_deviceSettingsFPD != nullptr) {
+                    if (EnsureDeviceSettingsFPD()) {
                         FrontPanelConfigStore configStore;
                         if (LoadFrontPanelConfig(_deviceSettingsFPD, configStore) == true) {
                             fpIndicators = configStore.indicators;
@@ -240,7 +260,7 @@ namespace WPEFramework
                     }
 #endif
 
-                    if (_deviceSettingsFPD != nullptr) {
+                    if (EnsureDeviceSettingsFPD()) {
                         uint32_t powerBrightness = 100;
                         if (_deviceSettingsFPD->GetFPDBrightness(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_POWER, powerBrightness) == Core::ERROR_NONE) {
                             globalLedBrightness = static_cast<int>(powerBrightness);
@@ -251,7 +271,7 @@ namespace WPEFramework
                     LOGINFO("Power light brightness, %d, power status %d", globalLedBrightness, powerStatus);
 
 		    profileType = searchRdkProfile();
-            if ((TV != profileType) && (_deviceSettingsFPD != nullptr))
+            if ((TV != profileType) && EnsureDeviceSettingsFPD())
 		    {
                         for (size_t i = 0; i < fpIndicators.size(); i++)
 			{
@@ -267,7 +287,7 @@ namespace WPEFramework
                         LOGWARN("Power LED Initializing is not set since we continue with bootloader patern");
 		    }
 
-		    if (powerStatus && (_deviceSettingsFPD != nullptr))
+            if (powerStatus && EnsureDeviceSettingsFPD())
                         _deviceSettingsFPD->SetFPDState(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_POWER, Exchange::IDeviceSettingsFPD::DS_FPD_STATE_ON);
 
                 }
@@ -294,6 +314,7 @@ namespace WPEFramework
                 _deviceSettingsFPD->Release();
                 _deviceSettingsFPD = nullptr;
             }
+            m_service = nullptr;
             if (s_instance) {
                 delete s_instance;
                 s_instance = nullptr;
@@ -306,7 +327,7 @@ namespace WPEFramework
             LOGWARN("Front panel start");
             try
             {
-                if (powerStatus && (_deviceSettingsFPD != nullptr)) {
+                if (powerStatus && EnsureDeviceSettingsFPD()) {
                     _deviceSettingsFPD->SetFPDState(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_POWER,
                                                     Exchange::IDeviceSettingsFPD::DS_FPD_STATE_ON);
                 }
@@ -360,7 +381,7 @@ namespace WPEFramework
             stopBlinkTimer();
             globalLedBrightness = fp_brightness;
 
-            if (_deviceSettingsFPD != nullptr) {
+            if (EnsureDeviceSettingsFPD()) {
                 try {
                     for (size_t i = 0; i < fpIndicators.size(); i++) {
                         _deviceSettingsFPD->SetFPDBrightness(fpIndicators.at(i), globalLedBrightness, true);
@@ -375,10 +396,30 @@ namespace WPEFramework
             return true;
         }
 
+        bool CFrontPanel::setBrightness(const std::string& index, int fp_brightness)
+        {
+            Exchange::IDeviceSettingsFPD::FPDIndicator indicator;
+
+            if (toIndicator(index, indicator) == true) {
+                try {
+                    if (EnsureDeviceSettingsFPD()) {
+                        _deviceSettingsFPD->SetFPDBrightness(indicator, fp_brightness, true);
+                        return true;
+                    }
+                }
+                catch (...) {
+                    LOGWARN("Exception thrown from ds while calling setBrightness");
+                    return false;
+                }
+            }
+
+            return setBrightness(fp_brightness);
+        }
+
         int CFrontPanel::getBrightness()
         {
             try {
-                if (_deviceSettingsFPD != nullptr) {
+                if (EnsureDeviceSettingsFPD()) {
                     uint32_t brightness = 0;
                     if (_deviceSettingsFPD->GetFPDBrightness(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_POWER, brightness) == Core::ERROR_NONE) {
                         globalLedBrightness = static_cast<int>(brightness);
@@ -393,11 +434,34 @@ namespace WPEFramework
             return globalLedBrightness;
         }
 
+        int CFrontPanel::getBrightness(const std::string& index)
+        {
+            Exchange::IDeviceSettingsFPD::FPDIndicator indicator;
+
+            if (toIndicator(index, indicator) == true) {
+                try {
+                    if (EnsureDeviceSettingsFPD()) {
+                        uint32_t brightness = 0;
+                        if (_deviceSettingsFPD->GetFPDBrightness(indicator, brightness) == Core::ERROR_NONE) {
+                            return static_cast<int>(brightness);
+                        }
+                    }
+                    return -1;
+                }
+                catch (...) {
+                    LOGWARN("Exception thrown from ds while calling getBrightness");
+                    return -1;
+                }
+            }
+
+            return getBrightness();
+        }
+
         bool CFrontPanel::powerOnLed(frontPanelIndicator fp_indicator)
         {
             stopBlinkTimer();
             try {
-                if ((_deviceSettingsFPD != nullptr) && powerStatus) {
+                if (EnsureDeviceSettingsFPD() && powerStatus) {
                     switch (fp_indicator) {
                     case FRONT_PANEL_INDICATOR_MESSAGE:
                         isMessageLedOn = true;
@@ -442,7 +506,7 @@ namespace WPEFramework
         {
             stopBlinkTimer();
             try {
-                if (_deviceSettingsFPD != nullptr) {
+                if (EnsureDeviceSettingsFPD()) {
                     switch (fp_indicator) {
                     case FRONT_PANEL_INDICATOR_MESSAGE:
                         isMessageLedOn = false;
@@ -500,7 +564,7 @@ namespace WPEFramework
             int brightness = -1;
             Exchange::IDeviceSettingsFPD::FPDIndicator indicator;
 
-            if ((_deviceSettingsFPD == nullptr) || (toIndicator(ledIndicator, indicator) == false)) {
+            if ((EnsureDeviceSettingsFPD() == false) || (toIndicator(ledIndicator, indicator) == false)) {
                 return false;
             }
 
@@ -624,7 +688,7 @@ namespace WPEFramework
             int brightness = blinkInfo.brightness;
             Exchange::IDeviceSettingsFPD::FPDIndicator indicator;
 
-            if ((_deviceSettingsFPD == nullptr) || (toIndicator(ledIndicator, indicator) == false)) {
+            if ((EnsureDeviceSettingsFPD() == false) || (toIndicator(ledIndicator, indicator) == false)) {
                 return;
             }
 

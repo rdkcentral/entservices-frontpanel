@@ -105,7 +105,9 @@ namespace WPEFramework
             void addEventObserver(FrontPanelImplementation* o);
             void removeEventObserver(FrontPanelImplementation* o);
             bool setBrightness(int fp_brighness);
+            bool setBrightness(const std::string& index, int fp_brighness);
             int getBrightness();
+            int getBrightness(const std::string& index);
             bool powerOffLed(frontPanelIndicator fp_indicator);
             bool powerOnLed(frontPanelIndicator fp_indicator);
             bool powerOffAllLed();
@@ -122,6 +124,8 @@ namespace WPEFramework
         private:
             CFrontPanel();
             static CFrontPanel* s_instance;
+            static PluginHost::IShell* m_service;
+            static bool EnsureDeviceSettingsFPD();
             void startBlinkTimer(int numberOfBlinkRepeats);
             void setBlinkLed(FrontPanelBlinkInfo blinkInfo);
             JsonObject m_preferencesHash;  // is this needed

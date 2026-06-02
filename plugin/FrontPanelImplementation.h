@@ -96,6 +96,7 @@ namespace WPEFramework {
             JsonObject getFrontPanelLightsInfo();
             void InitializePowerManager(PluginHost::IShell *service);
             void ReleaseDeviceSettings();
+            bool EnsureDeviceSettingsFPD();
             bool RefreshFrontPanelConfig();
 
 
@@ -106,6 +107,7 @@ namespace WPEFramework {
             Core::hresult PowerLedOff(const string& index, FrontPanelSuccess& success) override;
             Core::hresult GetFrontPanelLights(IFrontPanelLightsListIterator*& supportedLights , string &supportedLightsInfo, bool &success) override;
             Core::hresult SetLED(const string& ledIndicator, const uint32_t brightness, const string& color, const uint32_t red, const uint32_t green, const uint32_t blue, FrontPanelSuccess& success) override;
+            void setBlink(const JsonObject& blinkInfo);
             Core::hresult SetBlink(const string& blinkInfo, FrontPanelSuccess& success) override;
             Core::hresult Configure(PluginHost::IShell* service) override;
             //End methods
@@ -140,6 +142,7 @@ namespace WPEFramework {
             PowerManagerInterfaceRef _powerManagerPlugin;
             Core::Sink<PowerManagerNotification> _pwrMgrNotification;
             bool _registeredEventHandlers;
+            PluginHost::IShell* _service;
             Exchange::IDeviceSettingsFPD* _deviceSettingsFPD;
             std::vector<string> _supportedLights;
             std::unordered_map<string, IndicatorConfig> _indicatorConfigByName;
