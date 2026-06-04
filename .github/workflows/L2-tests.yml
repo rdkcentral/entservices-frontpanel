@@ -99,7 +99,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-frontpanel
           path: entservices-frontpanel
-          ref: feature/RDKEMW-16743
+          ref: develop
 
       - name: Checkout entservices-testframework
         uses: actions/checkout@v3
