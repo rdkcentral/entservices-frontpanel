@@ -161,11 +161,8 @@ namespace WPEFramework
             }
 
             CFrontPanel::instance()->deinitialize();
-
             _registeredEventHandlers = false;
-
             FrontPanelImplementation::_instance = nullptr;
-
         }
 
         Core::hresult FrontPanelImplementation::Configure(PluginHost::IShell* service)
@@ -178,7 +175,6 @@ namespace WPEFramework
 
             return Core::ERROR_NONE;
         }
-
 
         void FrontPanelImplementation::InitializePowerManager(PluginHost::IShell *service)
         {
@@ -232,6 +228,7 @@ namespace WPEFramework
                 }
                 catch (...)
                 {
+                    LOGERR("Exception Caught during setBrightness");
                     ok = false;
                 }
             }
@@ -247,7 +244,7 @@ namespace WPEFramework
             }
 
             success.success = ok;
-            return ok ? Core::ERROR_NONE : Core::ERROR_GENERAL;
+            return Core::ERROR_NONE;
         }
 
         /**
@@ -263,14 +260,10 @@ namespace WPEFramework
             LOGINFO("GetBrightness called with index: %s", index.c_str());
             bool ok = false;
             int value = -1;
-            
-
             string fp_ind = svc2iarm(index);
 
             if (!fp_ind.empty())
             {
-
-                
                 try
                 {
                     value = device::FrontPanelIndicator::getInstance(fp_ind.c_str()).getBrightness();
@@ -279,7 +272,6 @@ namespace WPEFramework
                 {
                     LOGWARN("Exception thrown from ds while calling getBrightness");
                 }
-                
             }
             else
             {
@@ -299,7 +291,7 @@ namespace WPEFramework
             }
 
             success = ok;
-            return ok ? Core::ERROR_NONE : Core::ERROR_GENERAL;
+            return Core::ERROR_NONE;
         }
 
         Core::hresult FrontPanelImplementation::PowerLedOn(const string& index, FrontPanelSuccess& success)
@@ -313,9 +305,8 @@ namespace WPEFramework
                 ok = CFrontPanel::instance()->powerOnLed(FRONT_PANEL_INDICATOR_POWER); 
             }
             success.success = ok;
-            return ok ? Core::ERROR_NONE : Core::ERROR_GENERAL;
+            return Core::ERROR_NONE;
         }
-
 
         Core::hresult FrontPanelImplementation::PowerLedOff(const string& index, FrontPanelSuccess& success)
         {
@@ -328,9 +319,8 @@ namespace WPEFramework
                 ok = CFrontPanel::instance()->powerOffLed(FRONT_PANEL_INDICATOR_POWER); 
             }
             success.success = ok;
-            return ok ? Core::ERROR_NONE : Core::ERROR_GENERAL;
+            return Core::ERROR_NONE;
         }
-
 
         /**
          * @brief getFrontPanelLights This returns an object containing attributes of front panel
@@ -370,7 +360,6 @@ namespace WPEFramework
          * @return Returns a serviceParams list of front panel lights info.
          */
 
-        
         JsonObject FrontPanelImplementation::getFrontPanelLightsInfo()
         {
             JsonObject returnResult;
@@ -412,7 +401,6 @@ namespace WPEFramework
             return Core::ERROR_NONE;
         }
 
-
         /**
          * @brief Sets the brightness and color properties of the specified LED.
          * The supported properties of the info object passed in will be determined by the color
@@ -424,7 +412,6 @@ namespace WPEFramework
          *
          * @return Returns success value of the helper method, returns false in case of failure.
          */
-
         Core::hresult FrontPanelImplementation::SetLED(const string& ledIndicator, const uint32_t brightness, const string& color, const uint32_t red, const uint32_t green, const uint32_t blue, FrontPanelSuccess& success)
         {
             LOGINFO("[%s][%d]SetLED called - LED Indicator: %s, Brightness: %d, Color: %s, Red: %d, Green: %d, Blue: %d", __FUNCTION__, __LINE__, ledIndicator.c_str(), brightness, color.c_str(), red, green, blue);
@@ -439,7 +426,7 @@ namespace WPEFramework
 
             bool ok = CFrontPanel::instance()->setLED(properties);
             success.success = ok;
-            return ok ? Core::ERROR_NONE : Core::ERROR_GENERAL;
+            return Core::ERROR_NONE;
         }
 
         /**
@@ -455,7 +442,6 @@ namespace WPEFramework
             CFrontPanel::instance()->setBlink(blinkInfo);
         }
 
-       
         Core::hresult FrontPanelImplementation::SetBlink(const string& blinkInfo, FrontPanelSuccess& success)
         {
             LOGINFO("SetBlink called with blinkInfo: %s", blinkInfo.c_str());
@@ -469,11 +455,11 @@ namespace WPEFramework
                 setBlink(inputObj);
                 ok = true;
             } catch (...) {
+                LOGERR("Exception Caught during setBlink");
                 ok = false;
             }
             success.success = ok;
-            return ok ? Core::ERROR_NONE : Core::ERROR_GENERAL;
+            return Core::ERROR_NONE;
         }
-
     } // namespace Plugin
 } // namespace WPEFramework

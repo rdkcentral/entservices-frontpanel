@@ -630,8 +630,8 @@ TEST_F(FrontPanelInitializedEventDsTest, setBrightnessCFrontPanelException)
             }));
 
     // The handler should catch the exception and return success:false.
-    EXPECT_EQ(Core::ERROR_GENERAL, handler.Invoke(connection, _T("setBrightness"), _T("{\"brightness\": 50,\"index\": \"power_led\"}"), response));
-    //EXPECT_EQ(response, string("{\"success\":true}"));
+    EXPECT_EQ(Core::ERROR_NONE, handler.Invoke(connection, _T("setBrightness"), _T("{\"brightness\": 50,\"index\": \"power_led\"}"), response));
+    EXPECT_EQ(response, string("{\"success\":false}"));
 }
 
 TEST_F(FrontPanelInitializedEventDsTest, powerLedOffExtended)
@@ -781,8 +781,9 @@ TEST_F(FrontPanelInitializedEventTest, getBrightnessException)
     // Act: Call the getBrightness method. The implementation should catch the exception.
     uint32_t result = handler.Invoke(connection, _T("getBrightness"), _T("{\"index\":\"power_led\"}"), response);
 
-    // Assert: Verify that the call failed with a general error and the response indicates failure.
-    EXPECT_EQ(result, Core::ERROR_GENERAL);
+    // Assert: Verify that the call returns ERROR_NONE with success:false in the response.
+    EXPECT_EQ(result, Core::ERROR_NONE);
+    EXPECT_TRUE(response.find("\"success\":false") != std::string::npos);
 }
 
 TEST_F(FrontPanelInitializedEventDsTest, powerOnLedException)
@@ -799,8 +800,9 @@ TEST_F(FrontPanelInitializedEventDsTest, powerOnLedException)
     // Act: Call the powerLedOn method. The implementation should catch the exception.
     uint32_t result = handler.Invoke(connection, _T("powerLedOn"), _T("{\"index\":\"power_led\"}"), response);
 
-    // Assert: Verify that the call failed with a general error and the response indicates failure.
-    EXPECT_EQ(result, Core::ERROR_GENERAL);
+    // Assert: Verify that the call returns ERROR_NONE with success:false in the response.
+    EXPECT_EQ(result, Core::ERROR_NONE);
+    EXPECT_EQ(response, string("{\"success\":false}"));
 }
 
 TEST_F(FrontPanelInitializedEventDsTest, powerOffLedException)
@@ -823,7 +825,8 @@ TEST_F(FrontPanelInitializedEventDsTest, powerOffLedException)
     // Act: Call the powerLedOff method. The implementation should catch the exception.
     uint32_t result = handler.Invoke(connection, _T("powerLedOff"), _T("{\"index\":\"power_led\"}"), response);
 
-    EXPECT_EQ(result, Core::ERROR_GENERAL);
+    EXPECT_EQ(result, Core::ERROR_NONE);
+    EXPECT_EQ(response, string("{\"success\":false}"));
 }
 
 TEST_F(FrontPanelInitializedEventDsTest, setLEDException)
@@ -845,6 +848,7 @@ TEST_F(FrontPanelInitializedEventDsTest, setLEDException)
     // Act: Call the setLED method. The implementation should catch the exception.
     uint32_t result = handler.Invoke(connection, _T("setLED"), _T("{\"ledIndicator\": \"power_led\", \"brightness\": 50, \"color\": \"red\"}"), response);
 
-    // Assert: Verify that the call failed with a general error and the response indicates failure.
-    EXPECT_EQ(result, Core::ERROR_GENERAL);
+    // Assert: Verify that the call returns ERROR_NONE with success:false in the response.
+    EXPECT_EQ(result, Core::ERROR_NONE);
+    EXPECT_EQ(response, string("{\"success\":false}"));
 }
