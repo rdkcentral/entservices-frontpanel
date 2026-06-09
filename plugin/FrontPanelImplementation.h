@@ -128,6 +128,11 @@ namespace WPEFramework {
             PowerManagerInterfaceRef _powerManagerPlugin;
             Core::Sink<PowerManagerNotification> _pwrMgrNotification;
             bool _registeredEventHandlers;
+            PluginHost::IShell* _service{nullptr};  /* stored in Configure(), used by restart handler */
+
+            /* IARM handler — re-initializes CFrontPanel after dsmgr restarts */
+            static void dsMgrRestartedHandler(const char* owner, IARM_EventId_t eventId,
+                                              void* data, size_t len);
 
         };
 

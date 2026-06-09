@@ -20,12 +20,15 @@
 #include "FrontPanelImplementation.h"
 #include "frontpanel.h"
 #include <algorithm>
+#include <thread>
+#include <chrono>
 
 #include "frontPanelIndicator.hpp"
 #include "frontPanelConfig.hpp"
 #include "frontPanelTextDisplay.hpp"
 
 #include "libIBus.h"
+#include "dsMgr.h"      /* IARM_BUS_DSMGR_NAME, IARM_BUS_DSMGR_EVENT_RESTARTED */
 
 #include "UtilsJsonRpc.h"
 #include "UtilsIarm.h"
@@ -143,6 +146,98 @@ namespace WPEFramework
 
         FrontPanelImplementation* FrontPanelImplementation::_instance = nullptr;
 
+        /* -----------------------------------------------------------------------
+         * dsMgrRestartedHandler
+         *
+         * Fired via IARM when dsmgr finishes restarting.  CFrontPanel holds DS
+         * FPD handles (via device::Manager) that became stale in the old dsmgr
+         * process.  This handler tears down CFrontPanel and re-initialises it
+         * against the new dsmgr, restoring all FPD config and preferences.
+         *
+         * NOTE: Must NOT call IARM_Bus_Call() synchronously here — the IARM
+         * dispatcher is still inside BroadcastEvent at this point and any
+         * re-entrant RPC call returns IARM_RESULT_IPCCORE_FAIL.  A detached
+         * thread is spawned instead so BroadcastEvent can return first.
+         * ----------------------------------------------------------------------- */
+        void FrontPanelImplementation::dsMgrRestartedHandler(
+                const char* owner, IARM_EventId_t eventId,
+                void* /*data*/, size_t /*len*/)
+        {
+            LOGINFO("[FrontPanel] IARM_BUS_DSMGR_EVENT_RESTARTED received owner=%s eventId=%d",
+                    owner, (int)eventId);
+
+            if (std::string(IARM_BUS_DSMGR_NAME) != std::string(owner)) {
+                LOGERR("[FrontPanel] Unexpected owner '%s', ignoring", owner);
+                return;
+            }
+
+            if (!_instance || !_instance->_service) {
+                LOGWARN("[FrontPanel] _instance or _service is null, skipping FPD restart");
+                return;
+            }
+
+            LOGINFO("[FrontPanel] Spawning FPD restart thread");
+
+            std::thread([]() {
+                /* Wait for BroadcastEvent to return before calling back into dsmgr.
+                 * Manager::Initialize() has internal 25x retry so one pass is enough;
+                 * we retry the whole block up to 5x in case Manager::Init itself fails. */
+                static const int INITIAL_DELAY_MS = 500;
+                static const int RETRY_DELAY_MS   = 1000;
+                static const int MAX_ATTEMPTS      = 5;
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(INITIAL_DELAY_MS));
+
+                for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+                    if (!_instance || !_instance->_service) {
+                        LOGWARN("[FrontPanel][restartThread] _instance or _service gone, aborting");
+                        return;
+                    }
+
+                    LOGINFO("[FrontPanel][restartThread] attempt %d/%d", attempt, MAX_ATTEMPTS);
+
+                    try {
+                        PluginHost::IShell* svc = _instance->_service;
+
+                        /* Tear down only if CFrontPanel is currently initialized */
+                        if (CFrontPanel::initDone) {
+                            LOGINFO("[FrontPanel][restartThread] deinitialize CFrontPanel");
+                            CFrontPanel::deinitialize();  /* sets initDone=0, calls Manager::DeInit */
+                        }
+
+                        /* Re-initialize: Manager::Initialize() (25x HAL retry) + FPD LED init */
+                        LOGINFO("[FrontPanel][restartThread] re-initializing CFrontPanel");
+                        CFrontPanel::instance(svc);        /* initDone==0 → full init path */
+                        CFrontPanel::instance()->start();
+                        CFrontPanel::instance()->loadPreferences();
+
+                        if (_instance) {
+                            CFrontPanel::instance()->addEventObserver(_instance);
+                        }
+
+                        LOGINFO("[FrontPanel][restartThread] CFrontPanel re-initialized OK "
+                                "on attempt %d", attempt);
+                        return;
+                    }
+                    catch (const std::exception& ex) {
+                        LOGERR("[FrontPanel][restartThread] attempt %d FAILED: %s",
+                               attempt, ex.what());
+                    }
+                    catch (...) {
+                        LOGERR("[FrontPanel][restartThread] attempt %d FAILED (unknown exception)",
+                               attempt);
+                    }
+
+                    if (attempt < MAX_ATTEMPTS) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(RETRY_DELAY_MS));
+                    } else {
+                        LOGERR("[FrontPanel][restartThread] All %d attempts exhausted — "
+                               "FPD state may be stale", MAX_ATTEMPTS);
+                    }
+                }
+            }).detach();
+        }
+
         FrontPanelImplementation::FrontPanelImplementation()
         : m_runUpdateTimer(false)
         , _pwrMgrNotification(*this)
@@ -155,6 +250,12 @@ namespace WPEFramework
 
         FrontPanelImplementation::~FrontPanelImplementation()
         {
+            /* Unregister RESTARTED handler first so no restart thread fires
+             * while we are tearing CFrontPanel down. */
+            IARM_Bus_UnRegisterEventHandler(
+                IARM_BUS_DSMGR_NAME,
+                IARM_BUS_DSMGR_EVENT_RESTARTED);
+
             if (_powerManagerPlugin) {
                 _powerManagerPlugin->Unregister(_pwrMgrNotification.baseInterface<Exchange::IPowerManager::IModeChangedNotification>());
                 _powerManagerPlugin.Reset();
@@ -164,6 +265,11 @@ namespace WPEFramework
 
             _registeredEventHandlers = false;
 
+            if (_service) {
+                _service->Release();
+                _service = nullptr;
+            }
+
             FrontPanelImplementation::_instance = nullptr;
 
         }
@@ -172,9 +278,27 @@ namespace WPEFramework
         {
             InitializePowerManager(service);
             FrontPanelImplementation::_instance = this;
+
+            /* Store service for use in the RESTARTED event handler */
+            _service = service;
+            _service->AddRef();
+
             CFrontPanel::instance(service);
             CFrontPanel::instance()->start();
             CFrontPanel::instance()->addEventObserver(this);
+
+            /* Register for dsmgr restart events so FPD handles are refreshed
+             * automatically if dsmgr crashes and restarts. */
+            IARM_Result_t iarmRet = IARM_Bus_RegisterEventHandler(
+                IARM_BUS_DSMGR_NAME,
+                IARM_BUS_DSMGR_EVENT_RESTARTED,
+                dsMgrRestartedHandler);
+            if (IARM_RESULT_SUCCESS != iarmRet) {
+                LOGERR("[FrontPanel] Failed to register IARM_BUS_DSMGR_EVENT_RESTARTED (ret=%d)",
+                       iarmRet);
+            } else {
+                LOGINFO("[FrontPanel] IARM_BUS_DSMGR_EVENT_RESTARTED handler registered OK");
+            }
 
             return Core::ERROR_NONE;
         }
