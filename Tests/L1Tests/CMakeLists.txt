@@ -32,7 +32,7 @@ set (TEST_LIB
     ${NAMESPACE}Plugins::${NAMESPACE}Plugins
 )
 
-set (TEST_INC ../../helpers)
+set (TEST_INC)
 
 #########################################################################################
 # add_plugin_test_ex: Macro to add plugin tests, it will append to TEST_SRC, TEST_INC,
@@ -102,7 +102,7 @@ macro(add_plugin_test plugin_name test_files)
 endmacro()
 
 # PLUGIN_FRONTPANEL
-set (FRONTPANEL_INC ../../plugin ../../helpers)
+set (FRONTPANEL_INC ../../plugin ${CMAKE_SOURCE_DIR}/../entservices-helpers/helpers ../../helpers)
 set (FRONTPANEL_LIBS ${NAMESPACE}FrontPanel ${NAMESPACE}FrontPanelImplementation)
 add_plugin_test_ex(PLUGIN_FRONTPANEL tests/test_FrontPanel.cpp "${FRONTPANEL_INC}" "${FRONTPANEL_LIBS}")
 
