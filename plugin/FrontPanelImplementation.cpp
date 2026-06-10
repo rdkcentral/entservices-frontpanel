@@ -205,17 +205,22 @@ namespace WPEFramework
                             CFrontPanel::deinitialize();  /* sets initDone=0, calls Manager::DeInit */
                         }
 
-                        /* Re-initialize: Manager::Initialize() (25x HAL retry) + FPD LED init */
-                        LOGINFO("[FrontPanel][restartThread] re-initializing CFrontPanel");
-                        CFrontPanel::instance(svc);        /* initDone==0 → full init path */
-                        CFrontPanel::instance()->start();
+                        /* Re-init FPD HAL: isForce=true resets m_isFPInitialized and re-calls dsFPInit() */
+                        LOGINFO("[FrontPanel][restartThread] re-init FPD HAL via getInstance(true)");
+                        device::FrontPanelConfig::getInstance(true /* isForce */);
 
+                        /* Re-init CFrontPanel: Manager::Initialize() + load indicators */
+                        LOGINFO("[FrontPanel][restartThread] re-init CFrontPanel");
+                        CFrontPanel::instance(svc);
+
+                        /* Restore power LED state */
+                        LOGINFO("[FrontPanel][restartThread] restore power LED via start()");
+                        CFrontPanel::instance()->start();
                         if (_instance) {
                             CFrontPanel::instance()->addEventObserver(_instance);
                         }
 
-                        LOGINFO("[FrontPanel][restartThread] CFrontPanel re-initialized OK "
-                                "on attempt %d", attempt);
+                        LOGINFO("[FrontPanel][restartThread] re-init OK on attempt %d", attempt);
                         return;
                     }
                     catch (const std::exception& ex) {
