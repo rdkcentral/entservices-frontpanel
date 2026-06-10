@@ -209,7 +209,6 @@ namespace WPEFramework
                         LOGINFO("[FrontPanel][restartThread] re-initializing CFrontPanel");
                         CFrontPanel::instance(svc);        /* initDone==0 → full init path */
                         CFrontPanel::instance()->start();
-                        CFrontPanel::instance()->loadPreferences();
 
                         if (_instance) {
                             CFrontPanel::instance()->addEventObserver(_instance);
