@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <thread>
 #include <chrono>
+#include <fstream>
 
 #include "frontPanelIndicator.hpp"
 #include "frontPanelConfig.hpp"
@@ -218,6 +219,19 @@ namespace WPEFramework
                         CFrontPanel::instance()->start();
                         if (_instance) {
                             CFrontPanel::instance()->addEventObserver(_instance);
+                        }
+
+                        /* Restore LED properties saved by SetLED() */
+                        {
+                            std::ifstream file("/tmp/ledproperties.txt");
+                            if (file.is_open()) {
+                                string propStr((std::istreambuf_iterator<char>(file)),
+                                               std::istreambuf_iterator<char>());
+                                JsonObject props;
+                                props.FromString(propStr);
+                                LOGINFO("[FrontPanel][restartThread] restoring LED from /tmp/ledproperties.txt");
+                                CFrontPanel::instance()->setLED(props);
+                            }
                         }
 
                         LOGINFO("[FrontPanel][restartThread] re-init OK on attempt %d", attempt);
@@ -564,6 +578,15 @@ namespace WPEFramework
             properties["red"] = red;
             properties["green"] = green;
             properties["blue"] = blue;
+
+            /* Persist LED properties for restore after dsmgr restart */
+            {
+                string propStr;
+                properties.ToString(propStr);
+                std::ofstream file("/tmp/ledproperties.txt");
+                if (file.is_open())
+                    file << propStr;
+            }
 
             bool ok = CFrontPanel::instance()->setLED(properties);
             success.success = ok;
