@@ -147,19 +147,9 @@ namespace WPEFramework
 
         FrontPanelImplementation* FrontPanelImplementation::_instance = nullptr;
 
-        /* -----------------------------------------------------------------------
-         * dsMgrRestartedHandler
-         *
-         * Fired via IARM when dsmgr finishes restarting.  CFrontPanel holds DS
-         * FPD handles (via device::Manager) that became stale in the old dsmgr
-         * process.  This handler tears down CFrontPanel and re-initialises it
-         * against the new dsmgr, restoring all FPD config and preferences.
-         *
-         * NOTE: Must NOT call IARM_Bus_Call() synchronously here — the IARM
-         * dispatcher is still inside BroadcastEvent at this point and any
-         * re-entrant RPC call returns IARM_RESULT_IPCCORE_FAIL.  A detached
-         * thread is spawned instead so BroadcastEvent can return first.
-         * ----------------------------------------------------------------------- */
+        /* On dsmgr restart: re-call dsFPInit() via getInstance(true), then restore
+         * LED/power state.  Spawns a detached thread — cannot call IARM_Bus_Call()
+         * synchronously from inside BroadcastEvent (re-entrancy → IPCCORE_FAIL). */
         void FrontPanelImplementation::dsMgrRestartedHandler(
                 const char* owner, IARM_EventId_t eventId,
                 void* /*data*/, size_t /*len*/)
@@ -172,8 +162,8 @@ namespace WPEFramework
                 return;
             }
 
-            if (!_instance || !_instance->_service) {
-                LOGWARN("[FrontPanel] _instance or _service is null, skipping FPD restart");
+            if (!_instance) {
+                LOGWARN("[FrontPanel] _instance is null, skipping FPD restart");
                 return;
             }
 
@@ -190,36 +180,22 @@ namespace WPEFramework
                 std::this_thread::sleep_for(std::chrono::milliseconds(INITIAL_DELAY_MS));
 
                 for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-                    if (!_instance || !_instance->_service) {
-                        LOGWARN("[FrontPanel][restartThread] _instance or _service gone, aborting");
+                    if (!_instance) {
+                        LOGWARN("[FrontPanel][restartThread] _instance gone, aborting");
                         return;
                     }
 
                     LOGINFO("[FrontPanel][restartThread] attempt %d/%d", attempt, MAX_ATTEMPTS);
 
                     try {
-                        PluginHost::IShell* svc = _instance->_service;
-
-                        /* Tear down only if CFrontPanel is currently initialized */
-                        if (CFrontPanel::initDone) {
-                            LOGINFO("[FrontPanel][restartThread] deinitialize CFrontPanel");
-                            CFrontPanel::deinitialize();  /* sets initDone=0, calls Manager::DeInit */
-                        }
-
-                        /* Re-init FPD HAL: isForce=true resets m_isFPInitialized and re-calls dsFPInit() */
+                        /* FPD uses enum IDs, not intptr_t handles — only dsFPInit() needs
+                         * re-calling; getInstance(true) does that without any deinit/reinit. */
                         LOGINFO("[FrontPanel][restartThread] re-init FPD HAL via getInstance(true)");
-                        device::FrontPanelConfig::getInstance(true /* isForce */);
-
-                        /* Re-init CFrontPanel: Manager::Initialize() + load indicators */
-                        LOGINFO("[FrontPanel][restartThread] re-init CFrontPanel");
-                        CFrontPanel::instance(svc);
+                        device::FrontPanelConfig::getInstance(true); /* isForce: resets m_isFPInitialized, re-calls dsFPInit() */
 
                         /* Restore power LED state */
                         LOGINFO("[FrontPanel][restartThread] restore power LED via start()");
                         CFrontPanel::instance()->start();
-                        if (_instance) {
-                            CFrontPanel::instance()->addEventObserver(_instance);
-                        }
 
                         /* Restore LED properties saved by SetLED() */
                         {
@@ -283,11 +259,6 @@ namespace WPEFramework
 
             _registeredEventHandlers = false;
 
-            if (_service) {
-                _service->Release();
-                _service = nullptr;
-            }
-
             FrontPanelImplementation::_instance = nullptr;
 
         }
@@ -296,10 +267,6 @@ namespace WPEFramework
         {
             InitializePowerManager(service);
             FrontPanelImplementation::_instance = this;
-
-            /* Store service for use in the RESTARTED event handler */
-            _service = service;
-            _service->AddRef();
 
             CFrontPanel::instance(service);
             CFrontPanel::instance()->start();
