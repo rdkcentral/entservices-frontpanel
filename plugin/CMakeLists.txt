@@ -76,7 +76,7 @@ endif(DS_FOUND)
 # ── DeviceSettings plugin COM-RPC integration (optional) ──────────────────────
 option(USE_DEVICESETTING_PLUGIN
     "Enable COM-RPC integration with the DeviceSettings plugin for FrontPanel (replaces libds/IARM path)"
-    OFF)
+    ON)
 
 if (USE_DEVICESETTING_PLUGIN)
     add_definitions(-DUSE_DEVICESETTING_PLUGIN)

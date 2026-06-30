@@ -169,6 +169,10 @@ namespace WPEFramework
             std::function<Exchange::IDeviceSettingsFPD*()> m_fpdAcquirer;
             /** Cached front-panel config (indicators, colors, bindings). */
             FrontPanelConfigStore m_fpConfigStore;
+
+            /** Map DS FPDIndicator enum to the service-manager LED name. */
+            static std::string dsIndicatorToSvcName(
+                Exchange::IDeviceSettingsFPD::FPDIndicator ind);
 #endif
         };
     } // namespace Plugin

@@ -92,19 +92,6 @@ namespace
         return name;
     }
 
-    string iarm2svc(const string &name)
-    {
-        const char *s = name.c_str();
-
-        int i = 0;
-        while (name_mappings[i].IArmBusName)
-        {
-            if (strcmp(s, name_mappings[i].IArmBusName) == 0)
-                return name_mappings[i].SvcManagerName;
-            i++;
-        }
-        return name;
-    }
 
 }
 

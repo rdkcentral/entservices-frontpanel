@@ -73,8 +73,10 @@ namespace WPEFramework
         static int globalLedBrightness = 100;
 
         int CFrontPanel::initDone = 0;
+#ifndef USE_DEVICESETTING_PLUGIN
         static bool isMessageLedOn = false;
         static bool isRecordLedOn = false;
+#endif // !USE_DEVICESETTING_PLUGIN
 
         static bool powerStatus = false;     //Check how this works on xi3 and rng's
         static bool started = false;
@@ -171,8 +173,11 @@ namespace WPEFramework
             return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX;
         }
 
-        /** Map DS FPDIndicator enum to the service-manager LED name. */
-        static std::string dsIndicatorToSvcName(
+#endif // USE_DEVICESETTING_PLUGIN
+        } // end anonymous namespace
+
+#ifdef USE_DEVICESETTING_PLUGIN
+        /*static*/ std::string CFrontPanel::dsIndicatorToSvcName(
             Exchange::IDeviceSettingsFPD::FPDIndicator ind)
         {
             switch (ind) {
@@ -185,6 +190,7 @@ namespace WPEFramework
             }
         }
 #endif // USE_DEVICESETTING_PLUGIN
+
         CFrontPanel::CFrontPanel()
             : m_blinkTimer(this)
             , m_isBlinking(false)
@@ -205,7 +211,7 @@ namespace WPEFramework
                 }
                 if (!s_instance)
                     s_instance = new CFrontPanel;
-#ifdef USE_DS
+#if defined(USE_DS) && !defined(USE_DEVICESETTING_PLUGIN)
                 try
                 {
                     LOGINFO("Initializing device manager");
@@ -291,7 +297,7 @@ namespace WPEFramework
                 delete s_instance;
                 s_instance = nullptr;
             }
-#ifdef USE_DS
+#if defined(USE_DS) && !defined(USE_DEVICESETTING_PLUGIN)
             try
             {
                 device::Manager::DeInitialize();
@@ -745,6 +751,7 @@ namespace WPEFramework
                     fpd->Release();
                 }
             }
+        } // end CFrontPanel::setBlink
 #else
             m_blinkList.clear();
             JsonArray patternList = blinkInfo["pattern"].Array();
