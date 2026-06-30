@@ -33,6 +33,11 @@
 #include <vector>
 
 #include <plugins/plugins.h>
+#include <functional>
+
+#ifdef USE_DEVICESETTING_PLUGIN
+#include "DeviceSettingsConfig.h"
+#endif
 
 namespace WPEFramework
 {
@@ -119,6 +124,32 @@ namespace WPEFramework
             void onBlinkTimer();
             static int initDone;
 
+            // ── Per-indicator brightness (not in original CFrontPanel API)
+            bool setBrightnessByName(const std::string& iarmName, int brightness);
+            int  getBrightnessByName(const std::string& iarmName);
+
+            // ── Enumeration / info helpers (delegated from FrontPanelImplementation)
+            std::vector<std::string> getFrontPanelLights();
+            JsonObject               getFrontPanelLightsInfo();
+
+#ifdef USE_DEVICESETTING_PLUGIN
+            /**
+             * Provide a factory that yields an AddRef'd IDeviceSettingsFPD* on demand.
+             * CFrontPanel calls it per operation and Release()s immediately.
+             * Pass nullptr (or empty function) to disable the DS path.
+             */
+            void setFPDAcquirer(std::function<Exchange::IDeviceSettingsFPD*()> acquirer);
+
+            /**
+             * Load the front-panel config from the live DS interface into the
+             * internal FrontPanelConfigStore.  Call from OnDeviceSettingsActivated.
+             */
+            void updateFPDConfigStore(Exchange::IDeviceSettingsFPD* fpd);
+
+            /** Drop both the acquirer and the config store. */
+            void clearFPDInterface();
+#endif
+
         private:
             CFrontPanel();
             static CFrontPanel* s_instance;
@@ -132,6 +163,13 @@ namespace WPEFramework
             std::list<FrontPanelImplementation*> observers_;
 
             std::string lastError_;
+
+#ifdef USE_DEVICESETTING_PLUGIN
+            /** Per-operation acquirer for IDeviceSettingsFPD (set from FrontPanelImplementation). */
+            std::function<Exchange::IDeviceSettingsFPD*()> m_fpdAcquirer;
+            /** Cached front-panel config (indicators, colors, bindings). */
+            FrontPanelConfigStore m_fpConfigStore;
+#endif
         };
     } // namespace Plugin
 } // namespace WPEFramework

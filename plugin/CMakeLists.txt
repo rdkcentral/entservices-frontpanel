@@ -73,6 +73,22 @@ else (DS_FOUND)
     target_link_libraries(${PLUGIN_IMPLEMENTATION} PRIVATE ${NAMESPACE}Plugins::${NAMESPACE}Plugins ${NAMESPACE}::${NAMESPACE}Helpers)
 endif(DS_FOUND)
 
+# ── DeviceSettings plugin COM-RPC integration (optional) ──────────────────────
+option(USE_DEVICESETTING_PLUGIN
+    "Enable COM-RPC integration with the DeviceSettings plugin for FrontPanel (replaces libds/IARM path)"
+    OFF)
+
+if (USE_DEVICESETTING_PLUGIN)
+    add_definitions(-DUSE_DEVICESETTING_PLUGIN)
+    find_package(${NAMESPACE}Definitions REQUIRED)
+    target_include_directories(${PLUGIN_IMPLEMENTATION} PRIVATE
+        ../helpers)
+    target_link_libraries(${PLUGIN_IMPLEMENTATION} PRIVATE
+        ${NAMESPACE}Definitions::${NAMESPACE}Definitions)
+    message(STATUS
+        "FrontPanel: USE_DEVICESETTING_PLUGIN=ON — using DeviceSettings COM-RPC (IDeviceSettingsFPD)")
+endif()
+# ──────────────────────────────────────────────────────────────────────────────
 
 #target_link_libraries(${MODULE_NAME} PRIVATE ${NAMESPACE}Plugins::${NAMESPACE}Plugins)
 

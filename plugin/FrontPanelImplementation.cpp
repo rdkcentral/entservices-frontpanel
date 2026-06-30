@@ -21,11 +21,13 @@
 #include "frontpanel.h"
 #include <algorithm>
 
+#ifndef USE_DEVICESETTING_PLUGIN
 #include "frontPanelIndicator.hpp"
 #include "frontPanelConfig.hpp"
 #include "frontPanelTextDisplay.hpp"
 
 #include "libIBus.h"
+#endif
 
 #include "UtilsJsonRpc.h"
 #include "UtilsIarm.h"
@@ -104,34 +106,6 @@ namespace
         return name;
     }
 
-    void getFrontPanelIndicatorInfo(device::FrontPanelIndicator &indicator,JsonObject &indicatorInfo)
-    {
-        JsonObject returnResult;
-        int levels=0, min=0, max=0;
-        string range;
-
-        indicator.getBrightnessLevels(levels, min, max);
-        range = "int";
-        indicatorInfo["range"] = range;
-
-        indicatorInfo["min"] = JsonValue(min);
-        indicatorInfo["max"] = JsonValue(max);
-
-        indicatorInfo["step"] = JsonValue((max-min)/levels);
-        
-        JsonArray availableColors;
-        const device::List <device::FrontPanelIndicator::Color> colorsList = indicator.getSupportedColors();
-        for (uint j = 0; j < colorsList.size(); j++)
-        {
-            availableColors.Add(colorsList.at(j).getName());
-        }
-        if (availableColors.Length() > 0)
-        {
-            indicatorInfo["colors"] = availableColors;
-        }
-
-        indicatorInfo["colorMode"] = indicator.getColorMode();
-    }
 }
 
 namespace WPEFramework
@@ -147,6 +121,9 @@ namespace WPEFramework
         : m_runUpdateTimer(false)
         , _pwrMgrNotification(*this)
         , _registeredEventHandlers(false)
+#ifdef USE_DEVICESETTING_PLUGIN
+        , _dsFpdNotification(*this)
+#endif
         {
             FrontPanelImplementation::_instance = this;
             m_runUpdateTimer = false;
@@ -160,7 +137,18 @@ namespace WPEFramework
                 _powerManagerPlugin.Reset();
             }
 
+#ifdef USE_DEVICESETTING_PLUGIN
+            {
+                auto* fpd = AcquireSubInterface<Exchange::IDeviceSettingsFPD>();
+                if (fpd) {
+                    fpd->Unregister(&_dsFpdNotification);
+                    fpd->Release();
+                }
+            }
+            DeviceSettingsClientHelper::Close();
+#else
             CFrontPanel::instance()->deinitialize();
+#endif
             _registeredEventHandlers = false;
             FrontPanelImplementation::_instance = nullptr;
         }
@@ -169,10 +157,13 @@ namespace WPEFramework
         {
             InitializePowerManager(service);
             FrontPanelImplementation::_instance = this;
+#ifdef USE_DEVICESETTING_PLUGIN
+            DeviceSettingsClientHelper::Open(service);
+#else
             CFrontPanel::instance(service);
             CFrontPanel::instance()->start();
             CFrontPanel::instance()->addEventObserver(this);
-
+#endif
             return Core::ERROR_NONE;
         }
 
@@ -188,6 +179,11 @@ namespace WPEFramework
 
         void FrontPanelImplementation::onPowerModeChanged(const PowerState currentState, const PowerState newState)
         {
+#ifdef USE_DEVICESETTING_PLUGIN
+            // In the COM-RPC path the DeviceSettings plugin manages front panel power state
+            // internally; no explicit CFrontPanel gate is needed here.
+            LOGINFO("onPowerModeChanged: newState=%d (DS plugin path — no CFrontPanel call)", static_cast<int>(newState));
+#else
             if(newState == WPEFramework::Exchange::IPowerManager::POWER_STATE_ON)
             {
                 LOGINFO("setPowerStatus true");
@@ -198,6 +194,7 @@ namespace WPEFramework
                 LOGINFO("setPowerStatus false");
                 CFrontPanel::instance()->setPowerStatus(false);
             }
+#endif
             return;
         }
 
@@ -214,33 +211,22 @@ namespace WPEFramework
         Core::hresult FrontPanelImplementation::SetBrightness(const string& index, const uint32_t brightness, FrontPanelSuccess& success)
         {
             LOGINFO("SetBrightness called with index: %s, brightness: %d", index.c_str(), brightness);
-            CFrontPanel::instance()->stopBlinkTimer();
             bool ok = false;
 
             string fp_ind = svc2iarm(index);
             if (!fp_ind.empty())
             {
-                
-                try
-                {
-                    device::FrontPanelIndicator::getInstance(fp_ind.c_str()).setBrightness(int(brightness));
-                    ok = true;
-                }
-                catch (...)
-                {
-                    LOGERR("Exception Caught during setBrightness");
-                    ok = false;
-                }
+                // Per-indicator brightness — delegated to CFrontPanel (handles DS/libds internally)
+                ok = CFrontPanel::instance()->setBrightnessByName(fp_ind, static_cast<int>(brightness));
             }
             else if (brightness <= 100)
             {
-                LOGWARN("calling setBrightness");
-                ok = CFrontPanel::instance()->setBrightness(brightness);
+                // Global brightness — delegated to CFrontPanel
+                ok = CFrontPanel::instance()->setBrightness(static_cast<int>(brightness));
             }
             else
             {
-                LOGWARN("Invalid brightnessLevel passed to method setBrightness CallMethod");
-                ok = false;
+                LOGWARN("Invalid brightnessLevel passed to SetBrightness");
             }
 
             success.success = ok;
@@ -260,33 +246,27 @@ namespace WPEFramework
             LOGINFO("GetBrightness called with index: %s", index.c_str());
             bool ok = false;
             int value = -1;
-            string fp_ind = svc2iarm(index);
 
+            string fp_ind = svc2iarm(index);
             if (!fp_ind.empty())
             {
-                try
-                {
-                    value = device::FrontPanelIndicator::getInstance(fp_ind.c_str()).getBrightness();
-                }
-                catch (...)
-                {
-                    LOGWARN("Exception thrown from ds while calling getBrightness");
-                }
+                // Per-indicator — delegated to CFrontPanel (handles DS/libds internally)
+                value = CFrontPanel::instance()->getBrightnessByName(fp_ind);
             }
             else
             {
-                LOGWARN("calling getBrightness");
+                // Global — delegated to CFrontPanel
                 value = CFrontPanel::instance()->getBrightness();
             }
 
             if (value >= 0)
             {
-                brightness = value;
+                brightness = static_cast<uint32_t>(value);
                 ok = true;
             }
             else
             {
-                brightness = -1;
+                brightness = static_cast<uint32_t>(-1);
                 ok = false;
             }
 
@@ -302,7 +282,7 @@ namespace WPEFramework
             } else if (index == RECORD_LED) {
                 ok = CFrontPanel::instance()->powerOnLed(FRONT_PANEL_INDICATOR_RECORD);
             } else if (index == POWER_LED) {
-                ok = CFrontPanel::instance()->powerOnLed(FRONT_PANEL_INDICATOR_POWER); 
+                ok = CFrontPanel::instance()->powerOnLed(FRONT_PANEL_INDICATOR_POWER);
             }
             success.success = ok;
             return Core::ERROR_NONE;
@@ -312,11 +292,11 @@ namespace WPEFramework
         {
             bool ok = false;
             if (index == DATA_LED) {
-                ok = CFrontPanel::instance()->powerOffLed(FRONT_PANEL_INDICATOR_MESSAGE); 
+                ok = CFrontPanel::instance()->powerOffLed(FRONT_PANEL_INDICATOR_MESSAGE);
             } else if (index == RECORD_LED) {
-                ok = CFrontPanel::instance()->powerOffLed(FRONT_PANEL_INDICATOR_RECORD); 
+                ok = CFrontPanel::instance()->powerOffLed(FRONT_PANEL_INDICATOR_RECORD);
             } else if (index == POWER_LED) {
-                ok = CFrontPanel::instance()->powerOffLed(FRONT_PANEL_INDICATOR_POWER); 
+                ok = CFrontPanel::instance()->powerOffLed(FRONT_PANEL_INDICATOR_POWER);
             }
             success.success = ok;
             return Core::ERROR_NONE;
@@ -334,15 +314,8 @@ namespace WPEFramework
          */
         std::vector<std::string> FrontPanelImplementation::getFrontPanelLights()
         {
-            std::vector<std::string> lights;
-            device::List <device::FrontPanelIndicator> fpIndicators = device::FrontPanelConfig::getInstance().getIndicators();
-            for (uint i = 0; i < fpIndicators.size(); i++)
-            {
-                string IndicatorNameIarm = fpIndicators.at(i).getName();
-                string MappedName = iarm2svc(IndicatorNameIarm);
-                if (MappedName != IndicatorNameIarm) lights.push_back(std::move(MappedName));
-            }
-            return lights;
+            // All DS/libds logic lives in CFrontPanel
+            return CFrontPanel::instance()->getFrontPanelLights();
         }
 
         /**
@@ -362,27 +335,8 @@ namespace WPEFramework
 
         JsonObject FrontPanelImplementation::getFrontPanelLightsInfo()
         {
-            JsonObject returnResult;
-            JsonObject indicatorInfo;
-            string IndicatorNameIarm, MappedName;
-
-            device::List <device::FrontPanelIndicator> fpIndicators = device::FrontPanelConfig::getInstance().getIndicators();
-            for (uint i = 0; i < fpIndicators.size(); i++)
-            {
-                IndicatorNameIarm = fpIndicators.at(i).getName();
-                MappedName = iarm2svc(IndicatorNameIarm);
-                getFrontPanelIndicatorInfo(fpIndicators.at(i),indicatorInfo);
-                if (MappedName != IndicatorNameIarm)
-                {
-                    returnResult[MappedName.c_str()] = indicatorInfo;
-                }
-                else
-                {
-                    returnResult[IndicatorNameIarm.c_str()] = indicatorInfo;
-                }		    
-            }
-
-            return returnResult;
+            // All DS/libds logic lives in CFrontPanel
+            return CFrontPanel::instance()->getFrontPanelLightsInfo();
         }
 
         Core::hresult FrontPanelImplementation::GetFrontPanelLights(IFrontPanelLightsListIterator*& supportedLights , string &supportedLightsInfo, bool &success)
@@ -418,12 +372,13 @@ namespace WPEFramework
 
             JsonObject properties;
             properties["ledIndicator"] = ledIndicator.c_str();
-            properties["brightness"] = brightness;
-            properties["color"] = color.c_str();
-            properties["red"] = red;
-            properties["green"] = green;
-            properties["blue"] = blue;
+            properties["brightness"]   = brightness;
+            properties["color"]        = color.c_str();
+            properties["red"]          = red;
+            properties["green"]        = green;
+            properties["blue"]         = blue;
 
+            // All DS/libds logic lives in CFrontPanel::setLED
             bool ok = CFrontPanel::instance()->setLED(properties);
             success.success = ok;
             return Core::ERROR_NONE;
@@ -447,15 +402,13 @@ namespace WPEFramework
             LOGINFO("SetBlink called with blinkInfo: %s", blinkInfo.c_str());
             bool ok = false;
             try {
-                // Parse the input string as JSON
                 JsonObject inputObj;
                 inputObj.FromString(blinkInfo);
-
-                // Call setBlink with the parsed object
+                // All DS/libds blink logic lives in CFrontPanel::setBlink
                 setBlink(inputObj);
                 ok = true;
             } catch (...) {
-                LOGERR("Exception Caught during setBlink");
+                LOGERR("Exception Caught during SetBlink");
                 ok = false;
             }
             success.success = ok;
@@ -463,3 +416,35 @@ namespace WPEFramework
         }
     } // namespace Plugin
 } // namespace WPEFramework
+
+#ifdef USE_DEVICESETTING_PLUGIN
+namespace WPEFramework {
+    namespace Plugin {
+        void FrontPanelImplementation::OnDeviceSettingsActivated()
+        {
+            LOGINFO("OnDeviceSettingsActivated: setting FPD acquirer and loading config");
+
+            // Give CFrontPanel a lambda to acquire the FPD interface on demand
+            CFrontPanel::instance()->setFPDAcquirer([this]() {
+                return AcquireSubInterface<Exchange::IDeviceSettingsFPD>();
+            });
+
+            // Eagerly load the FPD config store (indicator/color metadata) into CFrontPanel
+            auto* fpd = AcquireSubInterface<Exchange::IDeviceSettingsFPD>();
+            if (fpd) {
+                CFrontPanel::instance()->updateFPDConfigStore(fpd);
+                fpd->Register(&_dsFpdNotification);
+                fpd->Release();
+            } else {
+                LOGERR("OnDeviceSettingsActivated: IDeviceSettingsFPD not yet available");
+            }
+        }
+
+        void FrontPanelImplementation::OnDeviceSettingsDeactivated()
+        {
+            LOGINFO("OnDeviceSettingsDeactivated: clearing FPD interface");
+            CFrontPanel::instance()->clearFPDInterface();
+        }
+    } // namespace Plugin
+} // namespace WPEFramework
+#endif

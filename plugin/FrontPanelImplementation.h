@@ -27,6 +27,12 @@
 #include "PowerManagerInterface.h"
 #include <interfaces/IFrontPanel.h>
 
+#ifdef USE_DEVICESETTING_PLUGIN
+#include "DeviceSettingsClientHelper.h"
+#include "DeviceSettingsConfig.h"
+#include <interfaces/IDeviceSettingsFPD.h>
+#endif
+
 using namespace WPEFramework;
 using PowerState = WPEFramework::Exchange::IPowerManager::PowerState;
 using ThermalTemperature = WPEFramework::Exchange::IPowerManager::ThermalTemperature;
@@ -52,7 +58,11 @@ namespace WPEFramework {
 		// As the registration/unregistration of notifications is realized by the class PluginHost::JSONRPC,
 		// this class exposes a public method called, Notify(), using this methods, all subscribed clients
 		// will receive a JSONRPC message as a notification, in case this method is called.
-        class FrontPanelImplementation : public Exchange::IFrontPanel {
+        class FrontPanelImplementation : public Exchange::IFrontPanel
+#ifdef USE_DEVICESETTING_PLUGIN
+            , public DeviceSettingsClientHelper
+#endif
+        {
         private:
             class PowerManagerNotification : public Exchange::IPowerManager::IModeChangedNotification {
             private:
@@ -87,6 +97,27 @@ namespace WPEFramework {
                 FrontPanelImplementation& _parent;
             };
 
+#ifdef USE_DEVICESETTING_PLUGIN
+            // Inner delegate for IDeviceSettingsFPD notifications
+            class DSFPDNotification : public Exchange::IDeviceSettingsFPD::INotification {
+            private:
+                DSFPDNotification(const DSFPDNotification&) = delete;
+                DSFPDNotification& operator=(const DSFPDNotification&) = delete;
+            public:
+                explicit DSFPDNotification(FrontPanelImplementation& parent) : _parent(parent) {}
+                ~DSFPDNotification() override = default;
+                // Currently no FPD events forwarded to plugin consumers;
+                // extend here if OnFPDStateChanged etc. are added to IDeviceSettingsFPD.
+                void OnFPDTimeFormatChanged(const Exchange::IDeviceSettingsFPD::FPDTimeFormat) override {}
+
+                BEGIN_INTERFACE_MAP(DSFPDNotification)
+                    INTERFACE_ENTRY(Exchange::IDeviceSettingsFPD::INotification)
+                END_INTERFACE_MAP
+            private:
+                FrontPanelImplementation& _parent;
+            };
+#endif
+
             // We do not allow this plugin to be copied !!
             FrontPanelImplementation(const FrontPanelImplementation&) = delete;
             FrontPanelImplementation& operator=(const FrontPanelImplementation&) = delete;
@@ -115,6 +146,23 @@ namespace WPEFramework {
             void updateLedTextPattern();
             void registerEventHandlers();
 
+#ifdef USE_DEVICESETTING_PLUGIN
+        protected:
+            /**
+             * Called when DeviceSettings plugin (re-)activates.
+             * Loads FPD config from IDeviceSettingsFPD and re-registers
+             * the DS notification delegate.
+             */
+            void OnDeviceSettingsActivated() override;
+            /**
+             * Called when DeviceSettings plugin deactivates.
+             * Clears the cached FPD config store.
+             * Do NOT call AcquireSubInterface here — the link is already down.
+             */
+            void OnDeviceSettingsDeactivated() override;
+        public:
+#endif
+
             BEGIN_INTERFACE_MAP(FrontPanelImplementation)
                 INTERFACE_ENTRY(Exchange::IFrontPanel)
             END_INTERFACE_MAP
@@ -128,6 +176,11 @@ namespace WPEFramework {
             PowerManagerInterfaceRef _powerManagerPlugin;
             Core::Sink<PowerManagerNotification> _pwrMgrNotification;
             bool _registeredEventHandlers;
+
+#ifdef USE_DEVICESETTING_PLUGIN
+            // COM-RPC FPD notification sink — must be last in init order
+            Core::Sink<DSFPDNotification> _dsFpdNotification;
+#endif
 
         };
 
