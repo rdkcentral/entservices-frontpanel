@@ -29,7 +29,6 @@
 
 #ifdef USE_DEVICESETTING_PLUGIN
 #include "DeviceSettingsClientHelper.h"
-#include "DeviceSettingsConfig.h"
 #include <interfaces/IDeviceSettingsFPD.h>
 #endif
 

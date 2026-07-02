@@ -36,7 +36,7 @@
 #include <functional>
 
 #ifdef USE_DEVICESETTING_PLUGIN
-#include "DeviceSettingsConfig.h"
+#include "DeviceSettingsClientHelper.h"
 #endif
 
 namespace WPEFramework
