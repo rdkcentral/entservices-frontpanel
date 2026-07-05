@@ -17,20 +17,23 @@
 * limitations under the License.
 **/
 
+/**
+ * @file DS_COMRPC/FrontPanelImplementation.cpp
+ *
+ * @brief COM-RPC DeviceSettings path for the FrontPanel plugin.
+ *
+ * Compiled when USE_DEVICESETTING_PLUGIN is defined.
+ * Connects to entservices-devicesettings via COM-RPC (IDeviceSettingsFPD).
+ * All actual FP HAL operations are delegated to CFrontPanel (helpers/DS_COMRPC/)
+ * which calls IDeviceSettingsFPD via the acquirer lambda set in
+ * OnDeviceSettingsActivated().
+ */
+
 #include "FrontPanelImplementation.h"
 #include "frontpanel.h"
 #include <algorithm>
 
-#ifndef USE_DEVICESETTING_PLUGIN
-#include "frontPanelIndicator.hpp"
-#include "frontPanelConfig.hpp"
-#include "frontPanelTextDisplay.hpp"
-
-#include "libIBus.h"
-#endif
-
 #include "UtilsJsonRpc.h"
-#include "UtilsIarm.h"
 
 #define SERVICE_NAME "FrontPanelService"
 #define METHOD_FP_SET_BRIGHTNESS "setBrightness"
@@ -59,10 +62,8 @@
 
 using PowerState = WPEFramework::Exchange::IPowerManager::PowerState;
 
-
 namespace
 {
-
     struct Mapping
     {
         const char *IArmBusName;
@@ -73,15 +74,12 @@ namespace
         { "Record" , "record_led"},
         { "Message" , "data_led"},
         { "Power" , "power_led"},
-        // TODO: add your mappings here
-        // { <IARM_NAME>, <SVC_MANAGER_API_NAME> },
-        { 0,  0}
+        { 0, 0}
     };
 
-    string svc2iarm(const string &name)
+    string svcToIndicatorName(const string &name)
     {
         const char *s = name.c_str();
-
         int i = 0;
         while (name_mappings[i].SvcManagerName)
         {
@@ -91,13 +89,10 @@ namespace
         }
         return name;
     }
-
-
 }
 
 namespace WPEFramework
 {
-
     namespace Plugin
     {
         SERVICE_REGISTRATION(FrontPanelImplementation, API_VERSION_NUMBER_MAJOR, API_VERSION_NUMBER_MINOR, API_VERSION_NUMBER_PATCH);
@@ -105,16 +100,13 @@ namespace WPEFramework
         FrontPanelImplementation* FrontPanelImplementation::_instance = nullptr;
 
         FrontPanelImplementation::FrontPanelImplementation()
-        : m_runUpdateTimer(false)
-        , _pwrMgrNotification(*this)
-        , _registeredEventHandlers(false)
-#ifdef USE_DEVICESETTING_PLUGIN
-        , _dsFpdNotification(*this)
-#endif
+            : m_runUpdateTimer(false)
+            , _pwrMgrNotification(*this)
+            , _registeredEventHandlers(false)
+            , _dsFpdNotification(*this)   // COM-RPC notification sink
         {
             FrontPanelImplementation::_instance = this;
             m_runUpdateTimer = false;
-
         }
 
         FrontPanelImplementation::~FrontPanelImplementation()
@@ -124,7 +116,7 @@ namespace WPEFramework
                 _powerManagerPlugin.Reset();
             }
 
-#ifdef USE_DEVICESETTING_PLUGIN
+            // Unregister FPD notification and close COM-RPC link
             {
                 auto* fpd = AcquireSubInterface<Exchange::IDeviceSettingsFPD>();
                 if (fpd) {
@@ -133,9 +125,6 @@ namespace WPEFramework
                 }
             }
             DeviceSettingsClientHelper::Close();
-#else
-            CFrontPanel::instance()->deinitialize();
-#endif
             _registeredEventHandlers = false;
             FrontPanelImplementation::_instance = nullptr;
         }
@@ -144,13 +133,9 @@ namespace WPEFramework
         {
             InitializePowerManager(service);
             FrontPanelImplementation::_instance = this;
-#ifdef USE_DEVICESETTING_PLUGIN
+            // Open COM-RPC link to DeviceSettings plugin
+            // CFrontPanel is initialised lazily once OnDeviceSettingsActivated fires
             DeviceSettingsClientHelper::Open(service);
-#else
-            CFrontPanel::instance(service);
-            CFrontPanel::instance()->start();
-            CFrontPanel::instance()->addEventObserver(this);
-#endif
             return Core::ERROR_NONE;
         }
 
@@ -166,111 +151,68 @@ namespace WPEFramework
 
         void FrontPanelImplementation::onPowerModeChanged(const PowerState currentState, const PowerState newState)
         {
-#ifdef USE_DEVICESETTING_PLUGIN
-            // In the COM-RPC path the DeviceSettings plugin manages front panel power state
-            // internally; no explicit CFrontPanel gate is needed here.
-            LOGINFO("onPowerModeChanged: newState=%d (DS plugin path — no CFrontPanel call)", static_cast<int>(newState));
-#else
-            if(newState == WPEFramework::Exchange::IPowerManager::POWER_STATE_ON)
-            {
-                LOGINFO("setPowerStatus true");
-                CFrontPanel::instance()->setPowerStatus(true);
-            }
-            else
-            {
-                LOGINFO("setPowerStatus false");
-                CFrontPanel::instance()->setPowerStatus(false);
-            }
-#endif
-            return;
+            // The DeviceSettings plugin manages front panel power state internally;
+            // no explicit CFrontPanel gate is needed here.
+            LOGINFO("onPowerModeChanged: newState=%d (DS COM-RPC path)", static_cast<int>(newState));
         }
 
         void FrontPanelImplementation::registerEventHandlers()
         {
-            ASSERT (_powerManagerPlugin);
-
-            if(!_registeredEventHandlers && _powerManagerPlugin) {
+            ASSERT(_powerManagerPlugin);
+            if (!_registeredEventHandlers && _powerManagerPlugin) {
                 _registeredEventHandlers = true;
                 _powerManagerPlugin->Register(_pwrMgrNotification.baseInterface<Exchange::IPowerManager::IModeChangedNotification>());
             }
         }
 
+        // ── IFrontPanel method implementations ─────────────────────────────────
+        // All delegate to CFrontPanel, which calls IDeviceSettingsFPD via the
+        // acquirer lambda installed in OnDeviceSettingsActivated().
+
         Core::hresult FrontPanelImplementation::SetBrightness(const string& index, const uint32_t brightness, FrontPanelSuccess& success)
         {
-            LOGINFO("SetBrightness called with index: %s, brightness: %d", index.c_str(), brightness);
+            LOGINFO("SetBrightness: index=%s brightness=%u", index.c_str(), brightness);
             bool ok = false;
-
-            string fp_ind = svc2iarm(index);
+            string fp_ind = svcToIndicatorName(index);
             if (!fp_ind.empty())
-            {
-                // Per-indicator brightness — delegated to CFrontPanel (handles DS/libds internally)
                 ok = CFrontPanel::instance()->setBrightnessByName(fp_ind, static_cast<int>(brightness));
-            }
             else if (brightness <= 100)
-            {
-                // Global brightness — delegated to CFrontPanel
                 ok = CFrontPanel::instance()->setBrightness(static_cast<int>(brightness));
-            }
             else
-            {
                 LOGWARN("Invalid brightnessLevel passed to SetBrightness");
-            }
-
             success.success = ok;
             return Core::ERROR_NONE;
         }
 
-        /**
-         * @brief Gets the brightness of the specified LED.
-         *
-         * @param[in] argList List of arguments (Not used).
-         *
-         * @return Returns a ServiceParams object containing brightness value and function result.
-         * @ingroup SERVMGR_FRONTPANEL_API
-         */
         Core::hresult FrontPanelImplementation::GetBrightness(const string& index, uint32_t& brightness, bool& success)
         {
-            LOGINFO("GetBrightness called with index: %s", index.c_str());
-            bool ok = false;
+            LOGINFO("GetBrightness: index=%s", index.c_str());
             int value = -1;
-
-            string fp_ind = svc2iarm(index);
+            string fp_ind = svcToIndicatorName(index);
             if (!fp_ind.empty())
-            {
-                // Per-indicator — delegated to CFrontPanel (handles DS/libds internally)
                 value = CFrontPanel::instance()->getBrightnessByName(fp_ind);
-            }
             else
-            {
-                // Global — delegated to CFrontPanel
                 value = CFrontPanel::instance()->getBrightness();
-            }
 
-            if (value >= 0)
-            {
+            if (value >= 0) {
                 brightness = static_cast<uint32_t>(value);
-                ok = true;
-            }
-            else
-            {
+                success = true;
+            } else {
                 brightness = static_cast<uint32_t>(-1);
-                ok = false;
+                success = false;
             }
-
-            success = ok;
             return Core::ERROR_NONE;
         }
 
         Core::hresult FrontPanelImplementation::PowerLedOn(const string& index, FrontPanelSuccess& success)
         {
             bool ok = false;
-            if (index == DATA_LED) {
+            if (index == DATA_LED)
                 ok = CFrontPanel::instance()->powerOnLed(FRONT_PANEL_INDICATOR_MESSAGE);
-            } else if (index == RECORD_LED) {
+            else if (index == RECORD_LED)
                 ok = CFrontPanel::instance()->powerOnLed(FRONT_PANEL_INDICATOR_RECORD);
-            } else if (index == POWER_LED) {
+            else if (index == POWER_LED)
                 ok = CFrontPanel::instance()->powerOnLed(FRONT_PANEL_INDICATOR_POWER);
-            }
             success.success = ok;
             return Core::ERROR_NONE;
         }
@@ -278,85 +220,44 @@ namespace WPEFramework
         Core::hresult FrontPanelImplementation::PowerLedOff(const string& index, FrontPanelSuccess& success)
         {
             bool ok = false;
-            if (index == DATA_LED) {
+            if (index == DATA_LED)
                 ok = CFrontPanel::instance()->powerOffLed(FRONT_PANEL_INDICATOR_MESSAGE);
-            } else if (index == RECORD_LED) {
+            else if (index == RECORD_LED)
                 ok = CFrontPanel::instance()->powerOffLed(FRONT_PANEL_INDICATOR_RECORD);
-            } else if (index == POWER_LED) {
+            else if (index == POWER_LED)
                 ok = CFrontPanel::instance()->powerOffLed(FRONT_PANEL_INDICATOR_POWER);
-            }
             success.success = ok;
             return Core::ERROR_NONE;
         }
 
-        /**
-         * @brief getFrontPanelLights This returns an object containing attributes of front panel
-         * light: success, supportedLights, and supportedLightsInfo.
-         * supportedLights defines the LED lights that can be controlled through the Front Panel API.
-         * supportedLightsInfo defines a hash of objects describing each LED light.
-         * success - false if the supported lights info was unable to be determined.
-         *
-         * @return Returns a list of front panel lights parameter.
-         * @ingroup SERVMGR_FRONTPANEL_API
-         */
         std::vector<std::string> FrontPanelImplementation::getFrontPanelLights()
         {
-            // All DS/libds logic lives in CFrontPanel
             return CFrontPanel::instance()->getFrontPanelLights();
         }
 
-        /**
-         * @brief getFrontPanelLightsInfo This returns an object containing attributes of front
-         * panel light: success, supportedLights, and supportedLightsInfo.
-         * supportedLightsInfo defines a hash of objects describing each LED light properties such as
-         * -"range" Determines the types of values that can be expected in min and max value.
-         * -"min" The minimum value is equivalent to off i.e "0".
-         * -"max" The maximum value is when the LED is on i.e "1" and at its brightest.
-         * -"step" The step or interval between the min and max values supported by the LED.
-         * -"colorMode" Defines enum of "0" LED's color cannot be changed, "1"  LED can be set to any color
-         * (using rgb-hex code),"2"  LED can be set to an enumeration of colors as specified by the
-         * supportedColors property.
-         *
-         * @return Returns a serviceParams list of front panel lights info.
-         */
-
         JsonObject FrontPanelImplementation::getFrontPanelLightsInfo()
         {
-            // All DS/libds logic lives in CFrontPanel
             return CFrontPanel::instance()->getFrontPanelLightsInfo();
         }
 
-        Core::hresult FrontPanelImplementation::GetFrontPanelLights(IFrontPanelLightsListIterator*& supportedLights , string &supportedLightsInfo, bool &success)
+        Core::hresult FrontPanelImplementation::GetFrontPanelLights(IFrontPanelLightsListIterator*& supportedLights, string& supportedLightsInfo, bool& success)
         {
             LOGINFO("[%s][%d]GetFrontPanelLights called", __FUNCTION__, __LINE__);
-            std::vector<std::string> frontPanelLights;
-            frontPanelLights = getFrontPanelLights();
-            
+            std::vector<std::string> lights = getFrontPanelLights();
+
             JsonObject info = getFrontPanelLightsInfo();
             string infoStr;
             info.ToString(infoStr);
             supportedLightsInfo = std::move(infoStr);
             success = true;
 
-            supportedLights = (Core::Service<RPC::IteratorType<Exchange::IFrontPanel::IFrontPanelLightsListIterator>>::Create<Exchange::IFrontPanel::IFrontPanelLightsListIterator>(frontPanelLights));
+            supportedLights = (Core::Service<RPC::IteratorType<Exchange::IFrontPanel::IFrontPanelLightsListIterator>>::Create<Exchange::IFrontPanel::IFrontPanelLightsListIterator>(lights));
             return Core::ERROR_NONE;
         }
 
-        /**
-         * @brief Sets the brightness and color properties of the specified LED.
-         * The supported properties of the info object passed in will be determined by the color
-         * mode of the LED. If the colorMode of an LED is 0 color values will be ignored. If the
-         * brightness of the LED is unspecified or value = -1, then the persisted or default
-         * value for the system is used.
-         *
-         * @param[in] properties Key value pair of properties data.
-         *
-         * @return Returns success value of the helper method, returns false in case of failure.
-         */
         Core::hresult FrontPanelImplementation::SetLED(const string& ledIndicator, const uint32_t brightness, const string& color, const uint32_t red, const uint32_t green, const uint32_t blue, FrontPanelSuccess& success)
         {
-            LOGINFO("[%s][%d]SetLED called - LED Indicator: %s, Brightness: %d, Color: %s, Red: %d, Green: %d, Blue: %d", __FUNCTION__, __LINE__, ledIndicator.c_str(), brightness, color.c_str(), red, green, blue);
-
+            LOGINFO("[%s][%d]SetLED: %s brightness=%u", __FUNCTION__, __LINE__, ledIndicator.c_str(), brightness);
             JsonObject properties;
             properties["ledIndicator"] = ledIndicator.c_str();
             properties["brightness"]   = brightness;
@@ -364,21 +265,11 @@ namespace WPEFramework
             properties["red"]          = red;
             properties["green"]        = green;
             properties["blue"]         = blue;
-
-            // All DS/libds logic lives in CFrontPanel::setLED
             bool ok = CFrontPanel::instance()->setLED(properties);
             success.success = ok;
             return Core::ERROR_NONE;
         }
 
-        /**
-         * @brief Specifies a blinking pattern for an LED. This method returns immediately, but starts
-         * a process of iterating through each element in the array and lighting the LED with the specified
-         * brightness and color (if applicable) for the given duration (in milliseconds).
-         *
-         * @param[in] blinkInfo Object containing Indicator name, blink pattern and duration.
-         * @ingroup SERVMGR_FRONTPANEL_API
-         */
         void FrontPanelImplementation::setBlink(const JsonObject& blinkInfo)
         {
             CFrontPanel::instance()->setBlink(blinkInfo);
@@ -386,32 +277,28 @@ namespace WPEFramework
 
         Core::hresult FrontPanelImplementation::SetBlink(const string& blinkInfo, FrontPanelSuccess& success)
         {
-            LOGINFO("SetBlink called with blinkInfo: %s", blinkInfo.c_str());
+            LOGINFO("SetBlink: %s", blinkInfo.c_str());
             bool ok = false;
             try {
                 JsonObject inputObj;
                 inputObj.FromString(blinkInfo);
-                // All DS/libds blink logic lives in CFrontPanel::setBlink
                 setBlink(inputObj);
                 ok = true;
             } catch (...) {
-                LOGERR("Exception Caught during SetBlink");
+                LOGERR("Exception during SetBlink");
                 ok = false;
             }
             success.success = ok;
             return Core::ERROR_NONE;
         }
-    } // namespace Plugin
-} // namespace WPEFramework
 
-#ifdef USE_DEVICESETTING_PLUGIN
-namespace WPEFramework {
-    namespace Plugin {
+        // ── DeviceSettingsClientHelper lifecycle callbacks ──────────────────────
+
         void FrontPanelImplementation::OnDeviceSettingsActivated()
         {
             LOGINFO("OnDeviceSettingsActivated: setting FPD acquirer and loading config");
 
-            // Give CFrontPanel a lambda to acquire the FPD interface on demand
+            // Give CFrontPanel a lambda to acquire IDeviceSettingsFPD on demand
             CFrontPanel::instance()->setFPDAcquirer([this]() {
                 return AcquireSubInterface<Exchange::IDeviceSettingsFPD>();
             });
@@ -432,6 +319,6 @@ namespace WPEFramework {
             LOGINFO("OnDeviceSettingsDeactivated: clearing FPD interface");
             CFrontPanel::instance()->clearFPDInterface();
         }
+
     } // namespace Plugin
 } // namespace WPEFramework
-#endif
