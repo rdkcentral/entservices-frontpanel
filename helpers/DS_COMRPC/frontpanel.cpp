@@ -123,7 +123,7 @@ namespace WPEFramework
             }
         }
 
-        /** Map an IARM name (e.g. "Message") to the DS FPDIndicator enum. */
+        /** Map an IARM name (e.g. "Message") or numeric index string to the DS FPDIndicator enum. */
         static Exchange::IDeviceSettingsFPD::FPDIndicator iarmNameToDSIndicator(
             const std::string& name)
         {
@@ -132,6 +132,12 @@ namespace WPEFramework
             if (name == "Record")   return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_RECORD;
             if (name == "Remote")   return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_REMOTE;
             if (name == "RfByPass") return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_RFBYPASS;
+            // Fallback: treat as numeric indicator index (e.g. "0"=Message, "1"=Power, "2"=Record)
+            try {
+                int idx = std::stoi(name);
+                if (idx >= 0 && idx < static_cast<int>(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX))
+                    return static_cast<Exchange::IDeviceSettingsFPD::FPDIndicator>(idx);
+            } catch (...) {}
             return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX;
         }
 
@@ -502,22 +508,33 @@ namespace WPEFramework
 
         bool CFrontPanel::setBrightnessByName(const std::string& iarmName, int brightness)
         {
+            LOGINFO("setBrightnessByName: iarmName='%s' brightness=%d", iarmName.c_str(), brightness);
             stopBlinkTimer();
-            if (m_fpdAcquirer) {
-                auto* fpd = m_fpdAcquirer();
-                if (fpd) {
-                    Exchange::IDeviceSettingsFPD::FPDIndicator dsInd =
-                        iarmNameToDSIndicator(iarmName);
-                    bool ok = false;
-                    if (dsInd != Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
-                        ok = (fpd->SetFPDBrightness(dsInd,
-                                static_cast<uint32_t>(brightness), false) == Core::ERROR_NONE);
-                    }
-                    fpd->Release();
-                    return ok;
-                }
+            if (!m_fpdAcquirer) {
+                LOGERR("setBrightnessByName: m_fpdAcquirer is null (DeviceSettings not yet activated)");
+                return false;
             }
-            return false;
+            auto* fpd = m_fpdAcquirer();
+            if (!fpd) {
+                LOGERR("setBrightnessByName: IDeviceSettingsFPD interface not available");
+                return false;
+            }
+            Exchange::IDeviceSettingsFPD::FPDIndicator dsInd =
+                iarmNameToDSIndicator(iarmName);
+            LOGINFO("setBrightnessByName: dsInd=%d (MAX=%d)",
+                static_cast<int>(dsInd),
+                static_cast<int>(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX));
+            bool ok = false;
+            if (dsInd != Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
+                auto rc = fpd->SetFPDBrightness(dsInd,
+                    static_cast<uint32_t>(brightness), false);
+                ok = (rc == Core::ERROR_NONE);
+                LOGINFO("setBrightnessByName: SetFPDBrightness rc=%u ok=%s", rc, ok ? "true" : "false");
+            } else {
+                LOGERR("setBrightnessByName: unknown iarmName='%s', no indicator found", iarmName.c_str());
+            }
+            fpd->Release();
+            return ok;
         }
 
         int CFrontPanel::getBrightnessByName(const std::string& iarmName)

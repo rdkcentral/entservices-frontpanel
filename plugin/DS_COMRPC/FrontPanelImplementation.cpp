@@ -174,12 +174,14 @@ namespace WPEFramework
             LOGINFO("SetBrightness: index=%s brightness=%u", index.c_str(), brightness);
             bool ok = false;
             string fp_ind = svcToIndicatorName(index);
+            LOGINFO("SetBrightness: resolved indicator name='%s'", fp_ind.c_str());
             if (!fp_ind.empty())
                 ok = CFrontPanel::instance()->setBrightnessByName(fp_ind, static_cast<int>(brightness));
             else if (brightness <= 100)
                 ok = CFrontPanel::instance()->setBrightness(static_cast<int>(brightness));
             else
                 LOGWARN("Invalid brightnessLevel passed to SetBrightness");
+            LOGINFO("SetBrightness: result=%s", ok ? "success" : "failed");
             success.success = ok;
             return Core::ERROR_NONE;
         }
