@@ -118,13 +118,13 @@ namespace WPEFramework
 
             // Unregister FPD notification and close COM-RPC link
             {
-                auto* fpd = AcquireSubInterface<Exchange::IDeviceSettingsFPD>();
+                auto* fpd = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsFPD>();
                 if (fpd) {
                     fpd->Unregister(&_dsFpdNotification);
                     fpd->Release();
                 }
             }
-            DeviceSettingsClientHelper::Close();
+            DSHelper::Close();
             _registeredEventHandlers = false;
             FrontPanelImplementation::_instance = nullptr;
         }
@@ -135,7 +135,7 @@ namespace WPEFramework
             FrontPanelImplementation::_instance = this;
             // Open COM-RPC link to DeviceSettings plugin
             // CFrontPanel is initialised lazily once OnDeviceSettingsActivated fires
-            DeviceSettingsClientHelper::Open(service);
+            DSHelper::Open(service);
             return Core::ERROR_NONE;
         }
 
@@ -298,17 +298,36 @@ namespace WPEFramework
 
         void FrontPanelImplementation::OnDeviceSettingsActivated()
         {
-            LOGINFO("OnDeviceSettingsActivated: setting FPD acquirer and loading config");
+            LOGINFO("OnDeviceSettingsActivated: setting FPD acquirer and updating config from DSHelper");
 
             // Give CFrontPanel a lambda to acquire IDeviceSettingsFPD on demand
             CFrontPanel::instance()->setFPDAcquirer([this]() {
-                return AcquireSubInterface<Exchange::IDeviceSettingsFPD>();
+                return DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsFPD>();
             });
 
-            // Eagerly load the FPD config store (indicator/color metadata) into CFrontPanel
-            auto* fpd = AcquireSubInterface<Exchange::IDeviceSettingsFPD>();
+            // Config is already loaded by DSHelper::LoadAllConfigs() (via GetDeviceSettingConfigs)
+            // before this override is called.  Build FrontPanelConfigStore from the
+            // DSHelper accessors — no LoadFrontPanelConfig() call needed (deprecated for client plugins).
+            FrontPanelConfigStore fpStore;
+            fpStore.indicators    = DSHelper::getFPDIndicators();
+            fpStore.colors        = DSHelper::getFPDColors();
+            fpStore.textDisplays  = DSHelper::getFPDTextDisplays();
+            fpStore.colorBindings = DSHelper::getFPDColorBindings();
+
+            if (!fpStore.IsEmpty()) {
+                CFrontPanel::instance()->updateFPDConfigStore(fpStore);
+                LOGINFO("OnDeviceSettingsActivated: FPD config applied "
+                        "(indicators=%zu colors=%zu textDisplays=%zu bindings=%zu)",
+                        fpStore.indicators.size(),  fpStore.colors.size(),
+                        fpStore.textDisplays.size(), fpStore.colorBindings.size());
+            } else {
+                LOGERR("OnDeviceSettingsActivated: DSHelper FPD config is empty — "
+                       "GetDeviceSettingConfigs may not have returned FPD data yet");
+            }
+
+            // Register for FPD notifications
+            auto* fpd = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsFPD>();
             if (fpd) {
-                CFrontPanel::instance()->updateFPDConfigStore(fpd);
                 fpd->Register(&_dsFpdNotification);
                 fpd->Release();
             } else {

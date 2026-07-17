@@ -26,7 +26,8 @@
  *
  * Compiled when USE_DEVICESETTING_PLUGIN is defined.
  * Connects to entservices-devicesettings via COM-RPC (IDeviceSettingsFPD)
- * using DeviceSettingsClientHelper.  Does NOT link libds.so or libdshal-cli.so.
+ * using DSHelper (DeviceSettingsInterface.h — DeviceSettingsClientHelper.h removed).
+ * Does NOT link libds.so or libdshal-cli.so.
  */
 
 #include <mutex>
@@ -35,7 +36,7 @@
 #include <interfaces/IPowerManager.h>
 #include "PowerManagerInterface.h"
 #include <interfaces/IFrontPanel.h>
-#include "DeviceSettingsClientHelper.h"
+#include "DeviceSettingsInterface.h"
 #include <interfaces/IDeviceSettingsFPD.h>
 
 using namespace WPEFramework;
@@ -51,7 +52,7 @@ namespace WPEFramework {
 
         class FrontPanelImplementation
             : public Exchange::IFrontPanel
-            , public DeviceSettingsClientHelper
+            , public DSHelper  // DSHelper is the renamed DeviceSettingsClientHelper
         {
         private:
             class PowerManagerNotification : public Exchange::IPowerManager::IModeChangedNotification {

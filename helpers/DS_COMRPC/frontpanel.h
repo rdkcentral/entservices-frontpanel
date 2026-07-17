@@ -36,7 +36,7 @@
 #include <functional>
 
 #include <plugins/plugins.h>
-#include "DeviceSettingsClientHelper.h"
+#include "DeviceSettingsInterface.h"
 #include <interfaces/IDeviceSettingsFPD.h>
 
 namespace WPEFramework
@@ -132,8 +132,22 @@ namespace WPEFramework
             /**
              * Load the front-panel config from the live DS interface into
              * the internal FrontPanelConfigStore. Call from OnDeviceSettingsActivated.
+             * @deprecated Client plugins should use updateFPDConfigStore(const FrontPanelConfigStore&)
+             *             fed from DSHelper::getFPDIndicators() / getFPDColors() etc.
+             *             to avoid the deprecated LoadFrontPanelConfig() call.
              */
             void updateFPDConfigStore(Exchange::IDeviceSettingsFPD* fpd);
+
+            /**
+             * @brief Populate the FPD config store directly from pre-loaded data.
+             *
+             * Preferred for client plugins that obtain config via
+             * DSHelper::getFPDIndicators() / getFPDColors() / getFPDTextDisplays()
+             * / getFPDColorBindings() — no LoadFrontPanelConfig() call is made.
+             *
+             * @param store  FrontPanelConfigStore built from DSHelper::getFPD*() accessors.
+             */
+            void updateFPDConfigStore(const FrontPanelConfigStore& store);
 
             /** Drop both the acquirer and the config store. */
             void clearFPDInterface();

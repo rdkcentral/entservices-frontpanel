@@ -633,6 +633,13 @@ namespace WPEFramework
             }
         }
 
+        void CFrontPanel::updateFPDConfigStore(const FrontPanelConfigStore& store)
+        {
+            // Direct assignment from DSHelper pre-loaded data —
+            // no LoadFrontPanelConfig() call; preferred for client plugins.
+            m_fpConfigStore = store;
+        }
+
         void CFrontPanel::clearFPDInterface()
         {
             m_fpdAcquirer = nullptr;
