@@ -234,12 +234,64 @@ namespace WPEFramework
 
         std::vector<std::string> FrontPanelImplementation::getFrontPanelLights()
         {
-            return CFrontPanel::instance()->getFrontPanelLights();
+            // Read FPD indicator config directly from DSHelper — same pattern as DisplaySettings
+            // calling DSHelper::getAudioPortEntries() etc. inline.
+            std::vector<std::string> lights;
+            const auto indicators = DSHelper::getFPDIndicators();
+            for (size_t i = 0; i < indicators.size(); ++i) {
+                std::string name = CFrontPanel::dsIndicatorToSvcName(
+                    static_cast<Exchange::IDeviceSettingsFPD::FPDIndicator>(indicators[i].id));
+                if (!name.empty())
+                    lights.push_back(name);
+            }
+            return lights;
         }
 
         JsonObject FrontPanelImplementation::getFrontPanelLightsInfo()
         {
-            return CFrontPanel::instance()->getFrontPanelLightsInfo();
+            // Read FPD config directly from DSHelper — same pattern as DisplaySettings.
+            JsonObject returnResult;
+            const auto indicators    = DSHelper::getFPDIndicators();
+            const auto colorBindings = DSHelper::getFPDColorBindings();
+            const auto colors        = DSHelper::getFPDColors();
+
+            for (size_t i = 0; i < indicators.size(); ++i) {
+                const auto& ind = indicators[i];
+                std::string svcName = CFrontPanel::dsIndicatorToSvcName(
+                    static_cast<Exchange::IDeviceSettingsFPD::FPDIndicator>(ind.id));
+                if (svcName.empty()) continue;
+
+                JsonObject info;
+                info["range"]     = std::string("int");
+                info["min"]       = JsonValue(ind.minBrightness);
+                info["max"]       = JsonValue(ind.maxBrightness);
+                int step = (ind.levels > 0 && ind.maxBrightness > ind.minBrightness)
+                    ? (ind.maxBrightness - ind.minBrightness) / ind.levels : 1;
+                info["step"]      = JsonValue(step);
+                info["colorMode"] = JsonValue(ind.colorMode);
+
+                if (ind.colorMode > 0) {
+                    JsonArray availableColors;
+                    for (size_t b = 0; b < colorBindings.size(); ++b) {
+                        if (colorBindings[b].targetType == 0 &&
+                            colorBindings[b].targetId == ind.id) {
+                            for (size_t c = 0; c < colors.size(); ++c) {
+                                if (colors[c].id == colorBindings[b].colorId) {
+                                    char hexBuf[16];
+                                    snprintf(hexBuf, sizeof(hexBuf), "#%06X",
+                                             colors[c].color & 0xFFFFFFU);
+                                    availableColors.Add(std::string(hexBuf));
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (availableColors.Length() > 0)
+                        info["colors"] = availableColors;
+                }
+                returnResult[svcName.c_str()] = info;
+            }
+            return returnResult;
         }
 
         Core::hresult FrontPanelImplementation::GetFrontPanelLights(IFrontPanelLightsListIterator*& supportedLights, string& supportedLightsInfo, bool& success)
@@ -263,10 +315,47 @@ namespace WPEFramework
             JsonObject properties;
             properties["ledIndicator"] = ledIndicator.c_str();
             properties["brightness"]   = brightness;
-            properties["color"]        = color.c_str();
-            properties["red"]          = red;
-            properties["green"]        = green;
-            properties["blue"]         = blue;
+
+            if (!color.empty()) {
+                // Resolve the color name → RGB via DSHelper — same pattern as DisplaySettings
+                // calling DSHelper::getAudioPortHandleEntries() etc. directly.
+                // Map service-manager LED name → DS FPDIndicator inline.
+                auto svcToDs = [](const std::string& n) -> Exchange::IDeviceSettingsFPD::FPDIndicator {
+                    if (n == "power_led")    return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_POWER;
+                    if (n == "record_led")   return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_RECORD;
+                    if (n == "data_led")     return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MESSAGE;
+                    if (n == "remote_led")   return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_REMOTE;
+                    if (n == "rfbypass_led") return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_RFBYPASS;
+                    return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX;
+                };
+                Exchange::IDeviceSettingsFPD::FPDIndicator dsInd = svcToDs(ledIndicator);
+                uint32_t colorVal = 0;
+                const auto bindings = DSHelper::getFPDColorBindings();
+                const auto colors   = DSHelper::getFPDColors();
+                for (size_t b = 0; b < bindings.size(); ++b) {
+                    if (bindings[b].targetType == 0 &&
+                        bindings[b].targetId == static_cast<int32_t>(dsInd)) {
+                        for (size_t c = 0; c < colors.size(); ++c) {
+                            if (colors[c].id == bindings[b].colorId) {
+                                colorVal = colors[c].color;
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+                // Pass the resolved color as RGB so CFrontPanel needs no config access.
+                properties["color"]  = "";
+                properties["red"]    = (colorVal >> 16) & 0xFFU;
+                properties["green"]  = (colorVal >> 8)  & 0xFFU;
+                properties["blue"]   = colorVal & 0xFFU;
+            } else {
+                properties["color"]  = "";
+                properties["red"]    = red;
+                properties["green"]  = green;
+                properties["blue"]   = blue;
+            }
+
             bool ok = CFrontPanel::instance()->setLED(properties);
             success.success = ok;
             return Core::ERROR_NONE;
@@ -304,26 +393,10 @@ namespace WPEFramework
             CFrontPanel::instance()->setFPDAcquirer([this]() {
                 return DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsFPD>();
             });
-
-            // Config is already loaded by DSHelper::LoadAllConfigs() (via GetDeviceSettingConfigs)
-            // before this override is called.  Build FrontPanelConfigStore from the
-            // DSHelper accessors — no LoadFrontPanelConfig() call needed (deprecated for client plugins).
-            FrontPanelConfigStore fpStore;
-            fpStore.indicators    = DSHelper::getFPDIndicators();
-            fpStore.colors        = DSHelper::getFPDColors();
-            fpStore.textDisplays  = DSHelper::getFPDTextDisplays();
-            fpStore.colorBindings = DSHelper::getFPDColorBindings();
-
-            if (!fpStore.IsEmpty()) {
-                CFrontPanel::instance()->updateFPDConfigStore(fpStore);
-                LOGINFO("OnDeviceSettingsActivated: FPD config applied "
-                        "(indicators=%zu colors=%zu textDisplays=%zu bindings=%zu)",
-                        fpStore.indicators.size(),  fpStore.colors.size(),
-                        fpStore.textDisplays.size(), fpStore.colorBindings.size());
-            } else {
-                LOGERR("OnDeviceSettingsActivated: DSHelper FPD config is empty — "
-                       "GetDeviceSettingConfigs may not have returned FPD data yet");
-            }
+            LOGINFO("OnDeviceSettingsActivated: FPD acquirer set; config accessible via DSHelper "
+                    "(indicators=%zu colors=%zu textDisplays=%zu bindings=%zu)",
+                    DSHelper::getFPDIndicators().size(),  DSHelper::getFPDColors().size(),
+                    DSHelper::getFPDTextDisplays().size(), DSHelper::getFPDColorBindings().size());
 
             // Register for FPD notifications
             auto* fpd = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsFPD>();

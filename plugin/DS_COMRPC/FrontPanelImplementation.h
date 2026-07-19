@@ -52,7 +52,7 @@ namespace WPEFramework {
 
         class FrontPanelImplementation
             : public Exchange::IFrontPanel
-            , public DSHelper  // DSHelper is the renamed DeviceSettingsClientHelper
+            , public DSHelper
         {
         private:
             class PowerManagerNotification : public Exchange::IPowerManager::IModeChangedNotification {

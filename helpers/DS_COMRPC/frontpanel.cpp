@@ -365,27 +365,10 @@ namespace WPEFramework
                         iarmNameToDSIndicator(ledIndicator);
                     if (dsInd != Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
                         // Apply colour
-                        if (parameters.HasLabel("color") &&
-                            !parameters["color"].String().empty()) {
-                            // Resolve via config store: first colour binding for this indicator
-                            const auto& bindings = m_fpConfigStore.GetColorBindings();
-                            const auto& colors   = m_fpConfigStore.GetColors();
-                            uint32_t colorVal = 0;
-                            for (size_t b = 0; b < bindings.size(); ++b) {
-                                if (bindings[b].targetType == 0 &&
-                                    bindings[b].targetId == static_cast<int32_t>(dsInd)) {
-                                    for (size_t c = 0; c < colors.size(); ++c) {
-                                        if (colors[c].id == bindings[b].colorId) {
-                                            colorVal = colors[c].color;
-                                            break;
-                                        }
-                                    }
-                                    break;
-                                }
-                            }
-                            fpd->SetFPDColor(dsInd, colorVal);
-                            success = true;
-                        } else if (parameters.HasLabel("red")) {
+                        // Color name resolution is done by FrontPanelImplementation
+                        // via DSHelper::getFPDColorBindings() before calling setLED().
+                        // CFrontPanel only handles the pre-resolved RGB path.
+                        if (parameters.HasLabel("red")) {
                             uint32_t red = 0, green = 0, blue = 0;
                             getNumberParameter("red",   red);
                             getNumberParameter("green", green);
@@ -557,93 +540,15 @@ namespace WPEFramework
             return globalLedBrightness;
         }
 
-        // ─── Front-panel lights enumeration ───────────────────────────────────────
-
-        std::vector<std::string> CFrontPanel::getFrontPanelLights()
-        {
-            std::vector<std::string> lights;
-            const auto& indicators = m_fpConfigStore.GetIndicators();
-            for (size_t i = 0; i < indicators.size(); ++i) {
-                std::string name = dsIndicatorToSvcName(
-                    static_cast<Exchange::IDeviceSettingsFPD::FPDIndicator>(indicators[i].id));
-                if (!name.empty())
-                    lights.push_back(name);
-            }
-            return lights;
-        }
-
-        JsonObject CFrontPanel::getFrontPanelLightsInfo()
-        {
-            JsonObject returnResult;
-            const auto& indicators    = m_fpConfigStore.GetIndicators();
-            const auto& colorBindings = m_fpConfigStore.GetColorBindings();
-            const auto& colors        = m_fpConfigStore.GetColors();
-
-            for (size_t i = 0; i < indicators.size(); ++i) {
-                const auto& ind = indicators[i];
-                std::string svcName = dsIndicatorToSvcName(
-                    static_cast<Exchange::IDeviceSettingsFPD::FPDIndicator>(ind.id));
-                if (svcName.empty()) continue;
-
-                JsonObject info;
-                info["range"]     = std::string("int");
-                info["min"]       = JsonValue(ind.minBrightness);
-                info["max"]       = JsonValue(ind.maxBrightness);
-                int step = (ind.levels > 0 && ind.maxBrightness > ind.minBrightness)
-                    ? (ind.maxBrightness - ind.minBrightness) / ind.levels : 1;
-                info["step"]      = JsonValue(step);
-                info["colorMode"] = JsonValue(ind.colorMode);
-
-                if (ind.colorMode > 0) {
-                    JsonArray availableColors;
-                    for (size_t b = 0; b < colorBindings.size(); ++b) {
-                        if (colorBindings[b].targetType == 0 &&
-                            colorBindings[b].targetId == ind.id) {
-                            for (size_t c = 0; c < colors.size(); ++c) {
-                                if (colors[c].id == colorBindings[b].colorId) {
-                                    char hexBuf[16];
-                                    snprintf(hexBuf, sizeof(hexBuf), "#%06X",
-                                             colors[c].color & 0xFFFFFFU);
-                                    availableColors.Add(std::string(hexBuf));
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if (availableColors.Length() > 0)
-                        info["colors"] = availableColors;
-                }
-                returnResult[svcName.c_str()] = info;
-            }
-            return returnResult;
-        }
-
-        // ─── DS lifecycle management ──────────────────────────────────────────────
-
         void CFrontPanel::setFPDAcquirer(
             std::function<Exchange::IDeviceSettingsFPD*()> acquirer)
         {
             m_fpdAcquirer = std::move(acquirer);
         }
 
-        void CFrontPanel::updateFPDConfigStore(Exchange::IDeviceSettingsFPD* fpd)
-        {
-            if (fpd) {
-                LoadFrontPanelConfig(fpd, m_fpConfigStore);
-            }
-        }
-
-        void CFrontPanel::updateFPDConfigStore(const FrontPanelConfigStore& store)
-        {
-            // Direct assignment from DSHelper pre-loaded data —
-            // no LoadFrontPanelConfig() call; preferred for client plugins.
-            m_fpConfigStore = store;
-        }
-
         void CFrontPanel::clearFPDInterface()
         {
             m_fpdAcquirer = nullptr;
-            m_fpConfigStore.Clear();
         }
 
     }

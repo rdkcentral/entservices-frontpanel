@@ -118,10 +118,6 @@ namespace WPEFramework
             bool setBrightnessByName(const std::string& iarmName, int brightness);
             int  getBrightnessByName(const std::string& iarmName);
 
-            // Enumeration / info helpers
-            std::vector<std::string> getFrontPanelLights();
-            JsonObject               getFrontPanelLightsInfo();
-
             // ── COM-RPC DS lifecycle ─────────────────────────────────────────────
             /**
              * Provide a factory that yields an AddRef'd IDeviceSettingsFPD* on demand.
@@ -129,28 +125,12 @@ namespace WPEFramework
              */
             void setFPDAcquirer(std::function<Exchange::IDeviceSettingsFPD*()> acquirer);
 
-            /**
-             * Load the front-panel config from the live DS interface into
-             * the internal FrontPanelConfigStore. Call from OnDeviceSettingsActivated.
-             * @deprecated Client plugins should use updateFPDConfigStore(const FrontPanelConfigStore&)
-             *             fed from DSHelper::getFPDIndicators() / getFPDColors() etc.
-             *             to avoid the deprecated LoadFrontPanelConfig() call.
-             */
-            void updateFPDConfigStore(Exchange::IDeviceSettingsFPD* fpd);
-
-            /**
-             * @brief Populate the FPD config store directly from pre-loaded data.
-             *
-             * Preferred for client plugins that obtain config via
-             * DSHelper::getFPDIndicators() / getFPDColors() / getFPDTextDisplays()
-             * / getFPDColorBindings() — no LoadFrontPanelConfig() call is made.
-             *
-             * @param store  FrontPanelConfigStore built from DSHelper::getFPD*() accessors.
-             */
-            void updateFPDConfigStore(const FrontPanelConfigStore& store);
-
-            /** Drop both the acquirer and the config store. */
+            /** Drop the acquirer. */
             void clearFPDInterface();
+
+            /** Map DS FPDIndicator enum to the service-manager LED name.
+             *  Public so FrontPanelImplementation can use it for config lookups. */
+            static std::string dsIndicatorToSvcName(Exchange::IDeviceSettingsFPD::FPDIndicator ind);
 
         private:
             CFrontPanel();
@@ -167,11 +147,6 @@ namespace WPEFramework
 
             /** Per-operation acquirer for IDeviceSettingsFPD. */
             std::function<Exchange::IDeviceSettingsFPD*()> m_fpdAcquirer;
-            /** Cached front-panel config (indicators, colors, bindings). */
-            FrontPanelConfigStore m_fpConfigStore;
-
-            /** Map DS FPDIndicator enum to the service-manager LED name. */
-            static std::string dsIndicatorToSvcName(Exchange::IDeviceSettingsFPD::FPDIndicator ind);
         };
 
     } // namespace Plugin
