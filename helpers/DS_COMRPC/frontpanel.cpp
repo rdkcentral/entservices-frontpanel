@@ -379,8 +379,12 @@ namespace WPEFramework
                         }
                         // Apply brightness
                         int brightness = -1;
-                        if (parameters.HasLabel("brightness"))
-                            getNumberParameter("brightness", brightness);
+                        if (parameters.HasLabel("brightness")) {
+                            uint32_t uBright = static_cast<uint32_t>(-1);
+                            getNumberParameter("brightness", uBright);
+                            if (uBright != static_cast<uint32_t>(-1))
+                                brightness = static_cast<int>(uBright);
+                        }
                         if (brightness < 0) {
                             uint32_t bright = 0;
                             fpd->GetFPDBrightness(dsInd, bright);
