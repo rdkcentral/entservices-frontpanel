@@ -32,6 +32,7 @@
 #include "FrontPanelImplementation.h"
 #include "frontpanel.h"
 #include <algorithm>
+#include <fstream>
 
 #include "UtilsJsonRpc.h"
 
@@ -357,8 +358,18 @@ namespace WPEFramework
             }
 
             bool ok = CFrontPanel::instance()->setLED(properties);
+
+            /* Persist LED properties for restore after DeviceSettings plugin restart */
+            if (ok) {
+                string propStr;
+                properties.ToString(propStr);
+                std::ofstream file("/tmp/ledproperties.txt");
+                if (file.is_open())
+                    file << propStr;
+            }
+
             success.success = ok;
-            return Core::ERROR_NONE;
+            return ok ? Core::ERROR_NONE : Core::ERROR_GENERAL;
         }
 
         void FrontPanelImplementation::setBlink(const JsonObject& blinkInfo)
@@ -405,6 +416,19 @@ namespace WPEFramework
                 fpd->Release();
             } else {
                 LOGERR("OnDeviceSettingsActivated: IDeviceSettingsFPD not yet available");
+            }
+
+            /* Restore LED properties saved by the last SetLED() call */
+            {
+                std::ifstream file("/tmp/ledproperties.txt");
+                if (file.is_open()) {
+                    string propStr((std::istreambuf_iterator<char>(file)),
+                                   std::istreambuf_iterator<char>());
+                    JsonObject props;
+                    props.FromString(propStr);
+                    LOGINFO("OnDeviceSettingsActivated: restoring LED from /tmp/ledproperties.txt");
+                    CFrontPanel::instance()->setLED(props);
+                }
             }
         }
 

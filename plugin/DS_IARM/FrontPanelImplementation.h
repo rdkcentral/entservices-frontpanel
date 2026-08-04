@@ -130,6 +130,11 @@ namespace WPEFramework {
             Core::Sink<PowerManagerNotification> _pwrMgrNotification;
             bool _registeredEventHandlers;
 
+            /* Re-initializes FPD HAL after dsmgr restarts; spawns a detached thread
+             * to avoid re-entrant IARM_Bus_Call() inside BroadcastEvent. */
+            static void dsMgrRestartedHandler(const char* owner, IARM_EventId_t eventId,
+                                              void* data, size_t len);
+
         };
 
 	} // namespace Plugin
