@@ -97,7 +97,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-frontpanel
           path: entservices-frontpanel
-          ref: develop
+          ref: 2.0.0
 
       - name: Checkout entservices-testframework
         uses: actions/checkout@v3
