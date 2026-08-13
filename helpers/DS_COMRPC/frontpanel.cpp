@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <algorithm>
+#include <cctype>
 
 #if defined(HAS_API_POWERSTATE)
 #include <interfaces/IPowerManager.h>
@@ -364,11 +365,32 @@ namespace WPEFramework
                     Exchange::IDeviceSettingsFPD::FPDIndicator dsInd =
                         iarmNameToDSIndicator(ledIndicator);
                     if (dsInd != Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
-                        // Apply colour
-                        // Color name resolution is done by FrontPanelImplementation
-                        // via DSHelper::getFPDColorBindings() before calling setLED().
-                        // CFrontPanel only handles the pre-resolved RGB path.
-                        if (parameters.HasLabel("red")) {
+                        if (parameters.HasLabel("color") && !parameters["color"].String().empty()) {
+                            std::string color = parameters["color"].String();
+                            std::transform(color.begin(), color.end(), color.begin(),
+                                [](unsigned char character) { return std::tolower(character); });
+
+                            uint32_t colorValue = 0;
+                            if (color == "white") {
+                                colorValue = 0xFFFFFF;
+                            } else if (color == "red") {
+                                colorValue = 0xFF0000;
+                            } else if (color == "green") {
+                                colorValue = 0x00FF00;
+                            } else if (color == "blue") {
+                                colorValue = 0x0000FF;
+                            } else if (color == "yellow") {
+                                colorValue = 0xFFFFE0;
+                            } else if (color == "orange") {
+                                colorValue = 0xFF8C00;
+                            } else {
+                                LOGERR("setLED: unsupported color '%s'", parameters["color"].String().c_str());
+                                fpd->Release();
+                                return false;
+                            }
+
+                            success = (fpd->SetFPDColor(dsInd, colorValue) == Core::ERROR_NONE);
+                        } else if (parameters.HasLabel("red")) {
                             uint32_t red = 0, green = 0, blue = 0;
                             getNumberParameter("red",   red);
                             getNumberParameter("green", green);

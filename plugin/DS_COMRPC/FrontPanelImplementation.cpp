@@ -316,46 +316,10 @@ namespace WPEFramework
             JsonObject properties;
             properties["ledIndicator"] = ledIndicator.c_str();
             properties["brightness"]   = brightness;
-
-            if (!color.empty()) {
-                // Resolve the color name → RGB via DSHelper — same pattern as DisplaySettings
-                // calling DSHelper::getAudioPortHandleEntries() etc. directly.
-                // Map service-manager LED name → DS FPDIndicator inline.
-                auto svcToDs = [](const std::string& n) -> Exchange::IDeviceSettingsFPD::FPDIndicator {
-                    if (n == "power_led")    return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_POWER;
-                    if (n == "record_led")   return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_RECORD;
-                    if (n == "data_led")     return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MESSAGE;
-                    if (n == "remote_led")   return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_REMOTE;
-                    if (n == "rfbypass_led") return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_RFBYPASS;
-                    return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX;
-                };
-                Exchange::IDeviceSettingsFPD::FPDIndicator dsInd = svcToDs(ledIndicator);
-                uint32_t colorVal = 0;
-                const auto bindings = DSHelper::getFPDColorBindings();
-                const auto colors   = DSHelper::getFPDColors();
-                for (size_t b = 0; b < bindings.size(); ++b) {
-                    if (bindings[b].targetType == 0 &&
-                        bindings[b].targetId == static_cast<int32_t>(dsInd)) {
-                        for (size_t c = 0; c < colors.size(); ++c) {
-                            if (colors[c].id == bindings[b].colorId) {
-                                colorVal = colors[c].color;
-                                break;
-                            }
-                        }
-                        break;
-                    }
-                }
-                // Pass the resolved color as RGB so CFrontPanel needs no config access.
-                properties["color"]  = "";
-                properties["red"]    = (colorVal >> 16) & 0xFFU;
-                properties["green"]  = (colorVal >> 8)  & 0xFFU;
-                properties["blue"]   = colorVal & 0xFFU;
-            } else {
-                properties["color"]  = "";
-                properties["red"]    = red;
-                properties["green"]  = green;
-                properties["blue"]   = blue;
-            }
+            properties["color"]        = color.c_str();
+            properties["red"]          = red;
+            properties["green"]        = green;
+            properties["blue"]         = blue;
 
             bool ok = CFrontPanel::instance()->setLED(properties);
 
