@@ -63,11 +63,15 @@ namespace WPEFramework
 
            _service = service;
            _service->AddRef();
+           LOGINFO("Requesting FrontPanelImplementation out-of-process root (timeout 5000ms)");
            _frontPanel = _service->Root<Exchange::IFrontPanel>(_connectionId, 5000, _T("FrontPanelImplementation"));
+           LOGINFO("Root<IFrontPanel> returned: %s, connectionId: %u", (_frontPanel ? "non-null" : "null"), _connectionId);
 
            if(nullptr != _frontPanel)
             {
+                LOGINFO("Calling FrontPanel Configure");
                 _frontPanel->Configure(service);
+                LOGINFO("FrontPanel Configure completed, registering JSON-RPC handlers");
                 Exchange::JFrontPanel::Register(*this, _frontPanel);
                 LOGINFO("HdmiCecSource plugin is available. Successfully activated FrontPanel Plugin");
             }

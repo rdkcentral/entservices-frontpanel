@@ -167,23 +167,32 @@ namespace WPEFramework
 
         Core::hresult FrontPanelImplementation::Configure(PluginHost::IShell* service)
         {
+            LOGINFO("Configure: entry");
+            LOGINFO("Configure: initializing PowerManager");
             InitializePowerManager(service);
+            LOGINFO("Configure: PowerManager initialization complete");
             FrontPanelImplementation::_instance = this;
+            LOGINFO("Configure: creating/obtaining CFrontPanel instance");
             CFrontPanel::instance(service);
+            LOGINFO("Configure: CFrontPanel instance obtained, calling start");
             CFrontPanel::instance()->start();
+            LOGINFO("Configure: CFrontPanel start complete, adding event observer");
             CFrontPanel::instance()->addEventObserver(this);
-
+            LOGINFO("Configure: exit (success)");
             return Core::ERROR_NONE;
         }
 
         void FrontPanelImplementation::InitializePowerManager(PluginHost::IShell *service)
         {
+            LOGINFO("InitializePowerManager: entry");
             _powerManagerPlugin = PowerManagerInterfaceBuilder(_T("org.rdk.PowerManager"))
                                         .withIShell(service)
                                         .withRetryIntervalMS(200)
                                         .withRetryCount(25)
                                         .createInterface();
+            LOGINFO("InitializePowerManager: PowerManagerPlugin interface %s", (_powerManagerPlugin ? "obtained" : "null - PowerManager may not be available"));
             registerEventHandlers();
+            LOGINFO("InitializePowerManager: exit");
         }
 
         void FrontPanelImplementation::onPowerModeChanged(const PowerState currentState, const PowerState newState)
@@ -203,11 +212,17 @@ namespace WPEFramework
 
         void FrontPanelImplementation::registerEventHandlers()
         {
+            LOGINFO("registerEventHandlers: entry, _powerManagerPlugin=%s, _registeredEventHandlers=%s",
+                (_powerManagerPlugin ? "valid" : "null"), (_registeredEventHandlers ? "true" : "false"));
             ASSERT (_powerManagerPlugin);
 
             if(!_registeredEventHandlers && _powerManagerPlugin) {
                 _registeredEventHandlers = true;
+                LOGINFO("registerEventHandlers: registering IModeChangedNotification");
                 _powerManagerPlugin->Register(_pwrMgrNotification.baseInterface<Exchange::IPowerManager::IModeChangedNotification>());
+                LOGINFO("registerEventHandlers: IModeChangedNotification registered");
+            } else {
+                LOGWARN("registerEventHandlers: skipped - already registered or plugin unavailable");
             }
         }
 

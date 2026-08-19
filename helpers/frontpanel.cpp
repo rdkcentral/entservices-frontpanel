@@ -126,30 +126,40 @@ namespace WPEFramework
 
         CFrontPanel* CFrontPanel::instance(PluginHost::IShell *service)
         {
+            LOGINFO("CFrontPanel::instance: entry, initDone=%d", initDone);
             if (!initDone)
             {
                 if (nullptr != service)
                 {
+                    LOGINFO("CFrontPanel::instance: creating PowerManagerPlugin interface");
                     _powerManagerPlugin = PowerManagerInterfaceBuilder(_T("org.rdk.PowerManager"))
                                       .withIShell(service)
                                       .withRetryIntervalMS(200)
                                       .withRetryCount(25)
                                       .createInterface();
+                    LOGINFO("CFrontPanel::instance: PowerManagerPlugin interface %s", (_powerManagerPlugin ? "obtained" : "null"));
                 }
                 if (!s_instance)
+                {
+                    LOGINFO("CFrontPanel::instance: creating CFrontPanel object");
                     s_instance = new CFrontPanel;
+                    LOGINFO("CFrontPanel::instance: CFrontPanel object created");
+                }
 #ifdef USE_DS
                 try
                 {
                     LOGINFO("Initializing device manager");
                     device::Manager::Initialize();
+                    LOGINFO("device::Manager::Initialize complete");
 
                     LOGINFO("Front panel init");
                     fpIndicators = device::FrontPanelConfig::getInstance().getIndicators();
+                    LOGINFO("CFrontPanel::instance: got %zu fpIndicators", fpIndicators.size());
 
                     for (uint i = 0; i < fpIndicators.size(); i++)
                     {
                         std::string IndicatorNameIarm = fpIndicators.at(i).getName();
+                        LOGINFO("CFrontPanel::instance: processing indicator[%u]='%s'", i, IndicatorNameIarm.c_str());
 
                         auto it = std::find(m_lights.begin(), m_lights.end(), IndicatorNameIarm);
                         if (m_lights.end() == it)
@@ -157,6 +167,7 @@ namespace WPEFramework
                             m_lights.push_back(std::move(IndicatorNameIarm));
                         }
                     }
+                    LOGINFO("CFrontPanel::instance: m_lights populated with %zu entries", m_lights.size());
 
 #if defined(HAS_API_POWERSTATE)
                     {
@@ -164,24 +175,32 @@ namespace WPEFramework
                         PowerState pwrStateCur = WPEFramework::Exchange::IPowerManager::POWER_STATE_UNKNOWN;
                         PowerState pwrStatePrev = WPEFramework::Exchange::IPowerManager::POWER_STATE_UNKNOWN;
                         ASSERT (_powerManagerPlugin);
+                        LOGINFO("CFrontPanel::instance: querying current power state");
                         if (_powerManagerPlugin) {
                             res = _powerManagerPlugin->GetPowerState(pwrStateCur, pwrStatePrev);
+                            LOGINFO("CFrontPanel::instance: GetPowerState result=%u", (uint32_t)res);
                             if (Core::ERROR_NONE == res)
                             {
                                 if (pwrStateCur == WPEFramework::Exchange::IPowerManager::POWER_STATE_ON)
                                     powerStatus = true;
                             }
                             LOGINFO("pwrStateCur[%d] pwrStatePrev[%d] powerStatus[%d]", pwrStateCur, pwrStatePrev, powerStatus);
+                        } else {
+                            LOGWARN("CFrontPanel::instance: _powerManagerPlugin is null, skipping GetPowerState");
                         }
                     }
 #endif
 
+                    LOGINFO("CFrontPanel::instance: getting Power indicator brightness");
                     globalLedBrightness = device::FrontPanelIndicator::getInstance("Power").getBrightness();
                     LOGINFO("Power light brightness, %d, power status %d", globalLedBrightness, powerStatus);
 
+		    LOGINFO("CFrontPanel::instance: detecting RDK profile");
 		    profileType = searchRdkProfile();
+		    LOGINFO("CFrontPanel::instance: profileType=%d (TV=%d)", (int)profileType, (int)TV);
 		    if (TV != profileType)
 		    {
+                        LOGINFO("CFrontPanel::instance: non-TV profile, initializing all %zu indicator(s)", fpIndicators.size());
                         for (uint i = 0; i < fpIndicators.size(); i++)
 			{
                             LOGWARN("Initializing light %s", fpIndicators.at(i).getName().c_str());
@@ -190,12 +209,14 @@ namespace WPEFramework
 
 			    device::FrontPanelIndicator::getInstance(fpIndicators.at(i).getName()).setState(false);
 			}
+                        LOGINFO("CFrontPanel::instance: all indicators initialized");
 		    }
 		    else
 		    {
                         LOGWARN("Power LED Initializing is not set since we continue with bootloader patern");
 		    }
 
+		    LOGINFO("CFrontPanel::instance: powerStatus=%d, setting Power LED state accordingly", (int)powerStatus);
 		    if (powerStatus)
                         device::FrontPanelIndicator::getInstance("Power").setState(true);
 
@@ -204,10 +225,12 @@ namespace WPEFramework
                 {
                     LOGERR("Exception Caught during [CFrontPanel::instance]\r\n");
                 }
+                LOGINFO("CFrontPanel::instance: DS init complete, setting initDone=1");
                 initDone=1;
 #endif
             }
 
+            LOGINFO("CFrontPanel::instance: returning s_instance=%p", (void*)s_instance);
             return s_instance;
         }
 
@@ -240,13 +263,19 @@ namespace WPEFramework
 
         bool CFrontPanel::start()
         {
-            LOGWARN("Front panel start");
+            LOGWARN("Front panel start: entry, powerStatus=%d", (int)powerStatus);
             try
             {
                 if (powerStatus)
+                {
+                    LOGINFO("CFrontPanel::start: setting Power LED state true");
                     device::FrontPanelIndicator::getInstance("Power").setState(true);
+                    LOGINFO("CFrontPanel::start: Power LED state set");
+                }
 
+                LOGINFO("CFrontPanel::start: fetching fpIndicators");
                 device::List <device::FrontPanelIndicator> fpIndicators = device::FrontPanelConfig::getInstance().getIndicators();
+                LOGINFO("CFrontPanel::start: got %zu indicator(s), syncing m_lights", fpIndicators.size());
                 for (uint i = 0; i < fpIndicators.size(); i++)
                 {
                     std::string IndicatorNameIarm = fpIndicators.at(i).getName();
@@ -255,6 +284,7 @@ namespace WPEFramework
                     if (m_lights.end() == it)
                         m_lights.push_back(std::move(IndicatorNameIarm));
                 }
+                LOGINFO("CFrontPanel::start: m_lights now has %zu entries", m_lights.size());
             }
             catch (...)
             {
@@ -262,11 +292,15 @@ namespace WPEFramework
             }
             if (!started)
             {
+                LOGINFO("CFrontPanel::start: first start, resetting blink state");
                 m_numberOfBlinks = 0;
                 m_maxNumberOfBlinkRepeats = 0;
                 m_currentBlinkListIndex = 0;
                 started = true;
+            } else {
+                LOGINFO("CFrontPanel::start: already started, skipping blink reset");
             }
+            LOGINFO("CFrontPanel::start: exit");
             return true;
         }
 
