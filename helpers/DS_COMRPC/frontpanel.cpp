@@ -272,7 +272,7 @@ namespace WPEFramework
                 if (fpd) {
                     uint32_t bright = 0;
                     fpd->GetFPDBrightness(
-                        Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_POWER, bright);
+                        Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_POWER, bright, false);
                     fpd->Release();
                     globalLedBrightness = static_cast<int>(bright);
                 }
@@ -409,7 +409,7 @@ namespace WPEFramework
                         }
                         if (brightness < 0) {
                             uint32_t bright = 0;
-                            fpd->GetFPDBrightness(dsInd, bright);
+                            fpd->GetFPDBrightness(dsInd, bright, true);
                             brightness = static_cast<int>(bright);
                         }
                         if (brightness >= 0) {
@@ -556,7 +556,7 @@ namespace WPEFramework
                     int result = globalLedBrightness;
                     if (dsInd != Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
                         uint32_t bright = 0;
-                        if (fpd->GetFPDBrightness(dsInd, bright) == Core::ERROR_NONE)
+                        if (fpd->GetFPDBrightness(dsInd, bright, false) == Core::ERROR_NONE)
                             result = static_cast<int>(bright);
                     }
                     fpd->Release();
