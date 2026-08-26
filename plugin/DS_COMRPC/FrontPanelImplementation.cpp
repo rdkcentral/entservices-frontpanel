@@ -376,7 +376,7 @@ namespace WPEFramework
             // Register for FPD notifications
             auto* fpd = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsFPD>();
             if (fpd) {
-                fpd->Register(&_dsFpdNotification);
+                fpd->Register("FrontPanel", &_dsFpdNotification);
                 fpd->Release();
             } else {
                 LOGERR("OnDeviceSettingsActivated: IDeviceSettingsFPD not yet available");
