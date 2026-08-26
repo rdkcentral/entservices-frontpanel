@@ -536,7 +536,7 @@ namespace WPEFramework
             bool ok = false;
             if (dsInd != Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
                 auto rc = fpd->SetFPDBrightness(dsInd,
-                    static_cast<uint32_t>(brightness), false);
+                    static_cast<uint32_t>(brightness), true);
                 ok = (rc == Core::ERROR_NONE);
                 LOGINFO("setBrightnessByName: SetFPDBrightness rc=%u ok=%s", rc, ok ? "true" : "false");
             } else {
