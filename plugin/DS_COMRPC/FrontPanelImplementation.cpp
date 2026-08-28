@@ -136,7 +136,7 @@ namespace WPEFramework
             FrontPanelImplementation::_instance = this;
             // Open COM-RPC link to DeviceSettings plugin
             // CFrontPanel is initialised lazily once OnDeviceSettingsActivated fires
-            DSHelper::Open(service);
+            DSHelper::Open(service, "FrontPanel");
             return Core::ERROR_NONE;
         }
 
