@@ -255,7 +255,7 @@ namespace WPEFramework
          * @return Returns a ServiceParams object containing brightness value and function result.
          * @ingroup SERVMGR_FRONTPANEL_API
          */
-        Core::hresult FrontPanelImplementation::GetBrightness(const string& index, uint32_t& brightness, bool& success)
+        Core::hresult FrontPanelImplementation::GetBrightness(const string& index, int32_t& brightness, bool& success)
         {
             LOGINFO("GetBrightness called with index: %s", index.c_str());
             bool ok = false;
@@ -271,6 +271,9 @@ namespace WPEFramework
                 catch (...)
                 {
                     LOGWARN("Exception thrown from ds while calling getBrightness");
+		    	    brightness = -1;
+			        success = false;
+				    return Core::ERROR_NONE;
                 }
             }
             else

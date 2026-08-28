@@ -99,7 +99,7 @@ namespace WPEFramework {
 
             //Begin methods
             Core::hresult SetBrightness(const string& index, const uint32_t brightness, FrontPanelSuccess& success) override;
-            Core::hresult GetBrightness(const string& index, uint32_t& brightness, bool& success) override;
+            Core::hresult GetBrightness(const string& index, int32_t& brightness, bool& success) override;
             Core::hresult PowerLedOn(const string& index, FrontPanelSuccess& success) override;
             Core::hresult PowerLedOff(const string& index, FrontPanelSuccess& success) override;
             Core::hresult GetFrontPanelLights(IFrontPanelLightsListIterator*& supportedLights , string &supportedLightsInfo, bool &success) override;
