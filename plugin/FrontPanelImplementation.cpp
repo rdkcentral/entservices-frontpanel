@@ -271,6 +271,9 @@ namespace WPEFramework
                 catch (...)
                 {
                     LOGWARN("Exception thrown from ds while calling getBrightness");
+		            brightness = 0;
+			        success = false;
+			        return Core::ERROR_NONE;
                 }
             }
             else
