@@ -19,13 +19,25 @@
 
 #pragma once
 
+/**
+ * @file DS_COMRPC/FrontPanelImplementation.h
+ *
+ * @brief COM-RPC path for the FrontPanel plugin.
+ *
+ * Compiled when USE_DEVICESETTING_PLUGIN is defined.
+ * Connects to entservices-devicesettings via COM-RPC (IDeviceSettingsFPD)
+ * using DSHelper (DeviceSettingsInterface.h — DeviceSettingsClientHelper.h removed).
+ * Does NOT link libds.so or libdshal-cli.so.
+ */
+
 #include <mutex>
 #include "Module.h"
-#include "libIARM.h"
 #include "frontpanel.h"
 #include <interfaces/IPowerManager.h>
 #include "PowerManagerInterface.h"
 #include <interfaces/IFrontPanel.h>
+#include "DeviceSettingsInterface.h"
+#include <interfaces/IDeviceSettingsFPD.h>
 
 using namespace WPEFramework;
 using PowerState = WPEFramework::Exchange::IPowerManager::PowerState;
@@ -34,38 +46,27 @@ using ThermalTemperature = WPEFramework::Exchange::IPowerManager::ThermalTempera
 #define DATA_LED  "data_led"
 #define RECORD_LED "record_led"
 
-
 namespace WPEFramework {
 
     namespace Plugin {
 
-
-		// This is a server for a JSONRPC communication channel.
-		// For a plugin to be capable to handle JSONRPC, inherit from PluginHost::JSONRPC.
-		// By inheriting from this class, the plugin realizes the interface PluginHost::IDispatcher.
-		// This realization of this interface implements, by default, the following methods on this plugin
-		// - exists
-		// - register
-		// - unregister
-		// Any other methood to be handled by this plugin  can be added can be added by using the
-		// templated methods Register on the PluginHost::JSONRPC class.
-		// As the registration/unregistration of notifications is realized by the class PluginHost::JSONRPC,
-		// this class exposes a public method called, Notify(), using this methods, all subscribed clients
-		// will receive a JSONRPC message as a notification, in case this method is called.
-        class FrontPanelImplementation : public Exchange::IFrontPanel {
+        class FrontPanelImplementation
+            : public Exchange::IFrontPanel
+            , public DSHelper
+        {
         private:
             class PowerManagerNotification : public Exchange::IPowerManager::IModeChangedNotification {
             private:
                 PowerManagerNotification(const PowerManagerNotification&) = delete;
                 PowerManagerNotification& operator=(const PowerManagerNotification&) = delete;
-            
+
             public:
                 explicit PowerManagerNotification(FrontPanelImplementation& parent)
                     : _parent(parent)
                 {
                 }
                 ~PowerManagerNotification() override = default;
-            
+
             public:
                 void OnPowerModeChanged(const PowerState currentState, const PowerState newState) override
                 {
@@ -82,7 +83,25 @@ namespace WPEFramework {
                 BEGIN_INTERFACE_MAP(PowerManagerNotification)
                 INTERFACE_ENTRY(Exchange::IPowerManager::IModeChangedNotification)
                 END_INTERFACE_MAP
-            
+
+            private:
+                FrontPanelImplementation& _parent;
+            };
+
+            // Inner delegate for IDeviceSettingsFPD notifications
+            class DSFPDNotification : public Exchange::IDeviceSettingsFPD::INotification {
+            private:
+                DSFPDNotification(const DSFPDNotification&) = delete;
+                DSFPDNotification& operator=(const DSFPDNotification&) = delete;
+            public:
+                explicit DSFPDNotification(FrontPanelImplementation& parent) : _parent(parent) {}
+                ~DSFPDNotification() override = default;
+                // Extend here when IDeviceSettingsFPD::INotification grows new events.
+                void OnFPDTimeFormatChanged(const Exchange::IDeviceSettingsFPD::FPDTimeFormat) override {}
+
+                BEGIN_INTERFACE_MAP(DSFPDNotification)
+                    INTERFACE_ENTRY(Exchange::IDeviceSettingsFPD::INotification)
+                END_INTERFACE_MAP
             private:
                 FrontPanelImplementation& _parent;
             };
@@ -96,13 +115,12 @@ namespace WPEFramework {
             void setBlink(const JsonObject& blinkInfo);
             void InitializePowerManager(PluginHost::IShell *service);
 
-
             //Begin methods
             Core::hresult SetBrightness(const string& index, const uint32_t brightness, FrontPanelSuccess& success) override;
             Core::hresult GetBrightness(const string& index, uint32_t& brightness, bool& success) override;
             Core::hresult PowerLedOn(const string& index, FrontPanelSuccess& success) override;
             Core::hresult PowerLedOff(const string& index, FrontPanelSuccess& success) override;
-            Core::hresult GetFrontPanelLights(IFrontPanelLightsListIterator*& supportedLights , string &supportedLightsInfo, bool &success) override;
+            Core::hresult GetFrontPanelLights(IFrontPanelLightsListIterator*& supportedLights, string& supportedLightsInfo, bool& success) override;
             Core::hresult SetLED(const string& ledIndicator, const uint32_t brightness, const string& color, const uint32_t red, const uint32_t green, const uint32_t blue, FrontPanelSuccess& success) override;
             Core::hresult SetBlink(const string& blinkInfo, FrontPanelSuccess& success) override;
             Core::hresult Configure(PluginHost::IShell* service) override;
@@ -115,21 +133,39 @@ namespace WPEFramework {
             void updateLedTextPattern();
             void registerEventHandlers();
 
+        protected:
+            /**
+             * Called when DeviceSettings plugin (re-)activates.
+             * Loads FPD config from IDeviceSettingsFPD and re-registers
+             * the DS notification delegate.
+             */
+            void OnDeviceSettingsActivated() override;
+            /**
+             * Called when DeviceSettings plugin deactivates.
+             * Clears the cached FPD interface from CFrontPanel.
+             * Do NOT call AcquireSubInterface here — the link is already down.
+             */
+            void OnDeviceSettingsDeactivated() override;
+
+        public:
             BEGIN_INTERFACE_MAP(FrontPanelImplementation)
                 INTERFACE_ENTRY(Exchange::IFrontPanel)
             END_INTERFACE_MAP
+
         public:
             static FrontPanelImplementation* _instance;
+
         private:
             static int m_LedDisplayPatternUpdateTimerInterval;
 
-            bool           m_runUpdateTimer;
+            bool            m_runUpdateTimer;
             std::mutex      m_updateTimerMutex;
             PowerManagerInterfaceRef _powerManagerPlugin;
             Core::Sink<PowerManagerNotification> _pwrMgrNotification;
             bool _registeredEventHandlers;
-
+            // COM-RPC FPD notification sink — must be last in init order
+            Core::Sink<DSFPDNotification> _dsFpdNotification;
         };
 
-	} // namespace Plugin
+    } // namespace Plugin
 } // namespace WPEFramework

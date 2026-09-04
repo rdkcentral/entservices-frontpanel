@@ -116,7 +116,30 @@ namespace WPEFramework
                 }
                 return name;
             }
+
+        static void getFrontPanelIndicatorInfo(device::FrontPanelIndicator& indicator,
+                                               JsonObject& indicatorInfo)
+        {
+            int levels = 0, min = 0, max = 0;
+            indicator.getBrightnessLevels(levels, min, max);
+            indicatorInfo["range"] = std::string("int");
+            indicatorInfo["min"]   = JsonValue(min);
+            indicatorInfo["max"]   = JsonValue(max);
+            indicatorInfo["step"]  = JsonValue(levels > 0 ? (max - min) / levels : 1);
+
+            JsonArray availableColors;
+            const device::List<device::FrontPanelIndicator::Color> colorsList =
+                indicator.getSupportedColors();
+            for (uint j = 0; j < colorsList.size(); j++)
+                availableColors.Add(colorsList.at(j).getName());
+            if (availableColors.Length() > 0)
+                indicatorInfo["colors"] = availableColors;
+
+            indicatorInfo["colorMode"] = indicator.getColorMode();
         }
+
+        } // end anonymous namespace
+
 
         CFrontPanel::CFrontPanel()
             : m_blinkTimer(this)
@@ -138,7 +161,6 @@ namespace WPEFramework
                 }
                 if (!s_instance)
                     s_instance = new CFrontPanel;
-#ifdef USE_DS
                 try
                 {
                     LOGINFO("Initializing device manager");
@@ -205,7 +227,6 @@ namespace WPEFramework
                     LOGERR("Exception Caught during [CFrontPanel::instance]\r\n");
                 }
                 initDone=1;
-#endif
             }
 
             return s_instance;
@@ -224,7 +245,6 @@ namespace WPEFramework
                 delete s_instance;
                 s_instance = nullptr;
             }
-#ifdef USE_DS
             try
             {
                 device::Manager::DeInitialize();
@@ -234,7 +254,6 @@ namespace WPEFramework
             {
                 LOGERR("device::Manager::DeInitialize failed, Exception: {%s}", e.what());
             }
-#endif
             initDone = 0;
         }
 
@@ -367,7 +386,6 @@ namespace WPEFramework
                         device::FrontPanelIndicator::getInstance("Power").setState(true);
                         break;
                     case FRONT_PANEL_INDICATOR_POWER:
-                        //LOGWARN("CFrontPanel::powerOnLed() - FRONT_PANEL_INDICATOR_POWER not handled");
 			device::FrontPanelIndicator::getInstance("Power").setState(true);
                         break;
                     default:
@@ -407,13 +425,11 @@ namespace WPEFramework
                 case FRONT_PANEL_INDICATOR_ALL:
                     for (uint i = 0; i < fpIndicators.size(); i++)
                     {
-                        //LOGWARN("powerOffLed for Indicator %s", QString::fromStdString(fpIndicators.at(i).getName()).toUtf8().constData());
                         LOGWARN("powerOffLed for Indicator %s", fpIndicators.at(i).getName().c_str());
                         device::FrontPanelIndicator::getInstance(fpIndicators.at(i).getName()).setState(false);
                     }
                     break;
                 case FRONT_PANEL_INDICATOR_POWER:
-                    //LOGWARN("CFrontPanel::powerOffLed() - FRONT_PANEL_INDICATOR_POWER not handled");
 		    device::FrontPanelIndicator::getInstance("Power").setState(false);
                     break;
                 default:
@@ -446,6 +462,7 @@ namespace WPEFramework
             stopBlinkTimer();
             bool success = false;
             string ledIndicator = svc2iarm(parameters["ledIndicator"].String());
+
             int brightness = -1;
 
             if (parameters.HasLabel("brightness"))
@@ -505,10 +522,11 @@ namespace WPEFramework
         void CFrontPanel::setBlink(const JsonObject& blinkInfo)
         {
             stopBlinkTimer();
-            m_blinkList.clear();
             string ledIndicator = svc2iarm(blinkInfo["ledIndicator"].String());
             int iterations = 0;
             getNumberParameterObject(blinkInfo, "iterations", iterations);
+
+            m_blinkList.clear();
             JsonArray patternList = blinkInfo["pattern"].Array();
             for (int i = 0; i < patternList.Length(); i++)
             {
@@ -637,6 +655,83 @@ namespace WPEFramework
             m_frontPanel->onBlinkTimer();
             return(result);
         }
+
+        // ─── Per-indicator brightness helpers ─────────────────────────────────────
+
+        bool CFrontPanel::setBrightnessByName(const std::string& iarmName, int brightness)
+        {
+            stopBlinkTimer();
+            try {
+                device::FrontPanelIndicator::getInstance(iarmName.c_str()).setBrightness(brightness);
+                return true;
+            } catch (...) {
+                LOGERR("Exception in setBrightnessByName for %s", iarmName.c_str());
+                return false;
+            }
+        }
+
+        int CFrontPanel::getBrightnessByName(const std::string& iarmName)
+        {
+            try {
+                return device::FrontPanelIndicator::getInstance(iarmName.c_str()).getBrightness();
+            } catch (...) {
+                LOGWARN("Exception in getBrightnessByName for %s", iarmName.c_str());
+                return globalLedBrightness;
+            }
+        }
+
+        // ─── Front-panel lights enumeration ───────────────────────────────────────
+
+        std::vector<std::string> CFrontPanel::getFrontPanelLights()
+        {
+            std::vector<std::string> lights;
+            try {
+                device::List<device::FrontPanelIndicator> fpIndicators =
+                    device::FrontPanelConfig::getInstance().getIndicators();
+                for (uint i = 0; i < fpIndicators.size(); i++) {
+                    std::string iarmName = fpIndicators.at(i).getName();
+                    // Only include indicators that have a svc-manager name
+                    bool found = false;
+                    for (int m = 0; name_mappings[m].IArmBusName; ++m) {
+                        if (iarmName == name_mappings[m].IArmBusName) {
+                            lights.push_back(name_mappings[m].SvcManagerName);
+                            found = true;
+                            break;
+                        }
+                    }
+                    (void)found;
+                }
+            } catch (...) {
+                LOGERR("Exception in CFrontPanel::getFrontPanelLights");
+            }
+            return lights;
+        }
+
+        JsonObject CFrontPanel::getFrontPanelLightsInfo()
+        {
+            JsonObject returnResult;
+            try {
+                device::List<device::FrontPanelIndicator> fpIndicators =
+                    device::FrontPanelConfig::getInstance().getIndicators();
+                for (uint i = 0; i < fpIndicators.size(); i++) {
+                    std::string iarmName  = fpIndicators.at(i).getName();
+                    std::string svcName   = iarmName;
+                    for (int m = 0; name_mappings[m].IArmBusName; ++m) {
+                        if (iarmName == name_mappings[m].IArmBusName) {
+                            svcName = name_mappings[m].SvcManagerName;
+                            break;
+                        }
+                    }
+                    JsonObject indicatorInfo;
+                    getFrontPanelIndicatorInfo(fpIndicators.at(i), indicatorInfo);
+                    returnResult[svcName.c_str()] = indicatorInfo;
+                }
+            } catch (...) {
+                LOGERR("Exception in CFrontPanel::getFrontPanelLightsInfo");
+            }
+            return returnResult;
+        }
+
 
     }
 }

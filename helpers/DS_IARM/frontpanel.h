@@ -33,6 +33,7 @@
 #include <vector>
 
 #include <plugins/plugins.h>
+#include <functional>
 
 namespace WPEFramework
 {
@@ -118,6 +119,14 @@ namespace WPEFramework
 
             void onBlinkTimer();
             static int initDone;
+
+            // ── Per-indicator brightness (not in original CFrontPanel API)
+            bool setBrightnessByName(const std::string& iarmName, int brightness);
+            int  getBrightnessByName(const std::string& iarmName);
+
+            // ── Enumeration / info helpers (delegated from FrontPanelImplementation)
+            std::vector<std::string> getFrontPanelLights();
+            JsonObject               getFrontPanelLightsInfo();
 
         private:
             CFrontPanel();
