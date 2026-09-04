@@ -317,8 +317,17 @@ namespace WPEFramework
             string fp_ind = svc2iarm(index);
             if (!fp_ind.empty())
             {
-                // Per-indicator — delegated to CFrontPanel (handles DS/libds internally)
-                value = CFrontPanel::instance()->getBrightnessByName(fp_ind);
+                try
+                {
+                    value = device::FrontPanelIndicator::getInstance(fp_ind.c_str()).getBrightness();
+                }
+                catch (...)
+                {
+                    LOGWARN("Exception thrown from ds while calling getBrightness");
+		            brightness = 0;
+			        success = false;
+			        return Core::ERROR_NONE;
+                }
             }
             else
             {

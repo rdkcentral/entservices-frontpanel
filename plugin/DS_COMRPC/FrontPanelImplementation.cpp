@@ -201,7 +201,7 @@ namespace WPEFramework
                 brightness = static_cast<uint32_t>(value);
                 success = true;
             } else {
-                brightness = static_cast<uint32_t>(-1);
+                brightness = 0;
                 success = false;
             }
             return Core::ERROR_NONE;
