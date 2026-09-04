@@ -129,6 +129,10 @@ namespace WPEFramework {
             Core::Sink<PowerManagerNotification> _pwrMgrNotification;
             bool _registeredEventHandlers;
 
+            /* IARM handler — re-initializes CFrontPanel after dsmgr restarts */
+            static void dsMgrRestartedHandler(const char* owner, IARM_EventId_t eventId,
+                                              void* data, size_t len);
+
         };
 
 	} // namespace Plugin
