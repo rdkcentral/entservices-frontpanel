@@ -461,10 +461,15 @@ namespace WPEFramework
                     device::FrontPanelIndicator::getInstance(ledIndicator.c_str()).setColor(device::FrontPanelIndicator::Color::getInstance(colorString.c_str()), false);
                     success = true;
                 }
-                catch (...)
-                {
-                    success = false;
-                }
+                catch (const std::exception& e) 
+				{
+				   LOGERR("setLED: setColor FAILED ledIndicator=%s color='%s' ex='%s'", ledIndicator.c_str(), colorString.c_str(), e.what());
+                   success = false;  
+				}
+				catch (...) {
+                   LOGERR("setLED: setColor FAILED ledIndicator=%s color='%s' (unknown ex)", ledIndicator.c_str(), colorString.c_str());
+                   success = false; 
+				}
             }
             else if (parameters.HasLabel("red")) //color mode 1
             {
