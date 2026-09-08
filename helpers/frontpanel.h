@@ -33,6 +33,7 @@
 #include <list>
 #include <vector>
 #include <functional>
+#include <mutex>
 
 #include <plugins/plugins.h>
 #include "DeviceSettingsInterface.h"
@@ -149,6 +150,12 @@ namespace WPEFramework
 
             /** Per-operation acquirer for IDeviceSettingsFPD. */
             std::function<Exchange::IDeviceSettingsFPD*()> m_fpdAcquirer;
+
+            /** Guards m_fpdAcquirer against concurrent blink-timer use and DS restarts. */
+            std::mutex m_fpdAcquirerLock;
+
+            /** Returns an AddRef'd IDeviceSettingsFPD*, or nullptr if unavailable. */
+            Exchange::IDeviceSettingsFPD* acquireFPD();
         };
 
     } // namespace Plugin

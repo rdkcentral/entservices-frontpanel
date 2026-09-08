@@ -134,8 +134,9 @@ namespace WPEFramework
         {
             InitializePowerManager(service);
             FrontPanelImplementation::_instance = this;
-            // Open COM-RPC link to DeviceSettings plugin
-            // CFrontPanel is initialised lazily once OnDeviceSettingsActivated fires
+            // Build CFrontPanel's PowerManager link now; its FPD acquirer is
+            // installed later, once OnDeviceSettingsActivated fires.
+            CFrontPanel::instance(service);
             DSHelper::Open(service, "FrontPanel");
             return Core::ERROR_NONE;
         }
