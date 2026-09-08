@@ -69,7 +69,6 @@ namespace WPEFramework
         static int m_numberOfBlinks = 0;
         static int m_maxNumberOfBlinkRepeats = 0;
         static int m_currentBlinkListIndex = 0;
-        static std::vector<std::string> m_lights;
         static PowerManagerInterfaceRef _powerManagerPlugin;
 
         static Core::TimerType<BlinkInfo> blinkTimer(64 * 1024, "BlinkTimer");
@@ -192,9 +191,74 @@ namespace WPEFramework
                 }
                 if (!s_instance)
                     s_instance = new CFrontPanel;
+
+                initDone = 1;
             }
 
             return s_instance;
+        }
+
+        void CFrontPanel::initializeFPD()
+        {
+            if (!m_fpdAcquirer) {
+                LOGERR("initializeFPD: m_fpdAcquirer is null (DeviceSettings not yet activated)");
+                return;
+            }
+            auto* fpd = m_fpdAcquirer();
+            if (!fpd) {
+                LOGERR("initializeFPD: IDeviceSettingsFPD interface not available");
+                return;
+            }
+
+#if defined(HAS_API_POWERSTATE)
+            {
+                Core::hresult res = Core::ERROR_GENERAL;
+                PowerState pwrStateCur  = Exchange::IPowerManager::POWER_STATE_UNKNOWN;
+                PowerState pwrStatePrev = Exchange::IPowerManager::POWER_STATE_UNKNOWN;
+                ASSERT (_powerManagerPlugin);
+                if (_powerManagerPlugin) {
+                    res = _powerManagerPlugin->GetPowerState(pwrStateCur, pwrStatePrev);
+                    if (Core::ERROR_NONE == res)
+                    {
+                        if (pwrStateCur == Exchange::IPowerManager::POWER_STATE_ON)
+                            powerStatus = true;
+                    }
+                    LOGINFO("pwrStateCur[%d] pwrStatePrev[%d] powerStatus[%d]", pwrStateCur, pwrStatePrev, powerStatus);
+                }
+            }
+#endif
+
+            uint32_t bright = 0;
+            if (fpd->GetFPDBrightness(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_POWER,
+                    bright, false) == Core::ERROR_NONE)
+                globalLedBrightness = static_cast<int>(bright);
+            LOGINFO("Power light brightness, %d, power status %d", globalLedBrightness, powerStatus);
+
+            profileType = searchRdkProfile();
+            if (TV != profileType)
+            {
+                for (uint8_t i = 0;
+                     i < static_cast<uint8_t>(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX);
+                     ++i)
+                {
+                    auto ind = static_cast<Exchange::IDeviceSettingsFPD::FPDIndicator>(i);
+                    LOGWARN("Initializing light %s", dsIndicatorToSvcName(ind).c_str());
+                    if (powerStatus)
+                        fpd->SetFPDBrightness(ind, static_cast<uint32_t>(globalLedBrightness), false);
+
+                    fpd->SetFPDState(ind, Exchange::IDeviceSettingsFPD::DS_FPD_STATE_OFF);
+                }
+            }
+            else
+            {
+                LOGWARN("Power LED Initializing is not set since we continue with bootloader patern");
+            }
+
+            if (powerStatus)
+                fpd->SetFPDState(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_POWER,
+                    Exchange::IDeviceSettingsFPD::DS_FPD_STATE_ON);
+
+            fpd->Release();
         }
 
 
@@ -394,9 +458,9 @@ namespace WPEFramework
                             getNumberParameter("red",   red);
                             getNumberParameter("green", green);
                             getNumberParameter("blue",  blue);
-                            fpd->SetFPDColor(dsInd,
+                            const auto rc = fpd->SetFPDColor(dsInd,
                                 ((red & 0xFFU) << 16) | ((green & 0xFFU) << 8) | (blue & 0xFFU));
-                            success = true;
+                            success = (rc == Core::ERROR_NONE);
                         }
                         // Apply brightness
                         int brightness = -1;

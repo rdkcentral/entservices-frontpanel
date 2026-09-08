@@ -124,6 +124,9 @@ namespace WPEFramework
              */
             void setFPDAcquirer(std::function<Exchange::IDeviceSettingsFPD*()> acquirer);
 
+            /** DS-dependent startup init; call once the FPD acquirer is set. */
+            void initializeFPD();
+
             /** Drop the acquirer. */
             void clearFPDInterface();
 

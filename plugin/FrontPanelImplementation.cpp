@@ -124,6 +124,7 @@ namespace WPEFramework
                     fpd->Release();
                 }
             }
+            CFrontPanel::instance()->clearFPDInterface();
             DSHelper::Close();
             _registeredEventHandlers = false;
             FrontPanelImplementation::_instance = nullptr;
@@ -371,6 +372,8 @@ namespace WPEFramework
                     "(indicators=%zu colors=%zu textDisplays=%zu bindings=%zu)",
                     DSHelper::getFPDIndicators().size(),  DSHelper::getFPDColors().size(),
                     DSHelper::getFPDTextDisplays().size(), DSHelper::getFPDColorBindings().size());
+
+            CFrontPanel::instance()->initializeFPD();
 
             // Register for FPD notifications
             auto* fpd = DSHelper::AcquireSubInterface<Exchange::IDeviceSettingsFPD>();
