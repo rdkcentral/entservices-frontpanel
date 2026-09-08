@@ -20,14 +20,12 @@
 #pragma once
 
 /**
- * @file DS_COMRPC/FrontPanelImplementation.h
+ * @file FrontPanelImplementation.h
  *
- * @brief COM-RPC path for the FrontPanel plugin.
+ * @brief FrontPanel plugin implementation.
  *
- * Compiled when USE_DEVICESETTING_PLUGIN is defined.
  * Connects to entservices-devicesettings via COM-RPC (IDeviceSettingsFPD)
- * using DSHelper (DeviceSettingsInterface.h — DeviceSettingsClientHelper.h removed).
- * Does NOT link libds.so or libdshal-cli.so.
+ * using DSHelper (DeviceSettingsInterface.h).
  */
 
 #include <mutex>

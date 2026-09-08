@@ -24,9 +24,6 @@
 * @{
 **/
 
-//#define USE_DS //TODO - this was defined in servicemanager.pro for all STB builds.  Not sure where to put it except here for now
-//#define HAS_API_POWERSTATE
-
 #include "frontpanel.h"
 
 #include <time.h>
@@ -82,7 +79,7 @@ namespace WPEFramework
 
             struct Mapping
             {
-                const char *IArmBusName;
+                const char *IndicatorName;
                 const char *SvcManagerName;
             };
 
@@ -91,7 +88,7 @@ namespace WPEFramework
                 { "Message" , "data_led"},
                 { "Power" , "power_led"},
                 // TODO: add your mappings here
-                // { <IARM_NAME>, <SVC_MANAGER_API_NAME> },
+                // { <INDICATOR_NAME>, <SVC_MANAGER_API_NAME> },
                 { 0,  0}
             };
 
@@ -103,7 +100,7 @@ namespace WPEFramework
                 while (name_mappings[i].SvcManagerName)
                 {
                     if (strcmp(s, name_mappings[i].SvcManagerName) == 0)
-                        return name_mappings[i].IArmBusName;
+                        return name_mappings[i].IndicatorName;
                     i++;
                 }
                 return name;
@@ -124,8 +121,8 @@ namespace WPEFramework
             }
         }
 
-        /** Map an IARM name (e.g. "Message") or numeric index string to the DS FPDIndicator enum. */
-        static Exchange::IDeviceSettingsFPD::FPDIndicator iarmNameToDSIndicator(
+        /** Map an indicator name (e.g. "Message") or numeric index string to the DS FPDIndicator enum. */
+        static Exchange::IDeviceSettingsFPD::FPDIndicator indicatorNameToDSIndicator(
             const std::string& name)
         {
             if (name == "Message")  return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MESSAGE;
@@ -363,7 +360,7 @@ namespace WPEFramework
                 auto* fpd = m_fpdAcquirer();
                 if (fpd) {
                     Exchange::IDeviceSettingsFPD::FPDIndicator dsInd =
-                        iarmNameToDSIndicator(ledIndicator);
+                        indicatorNameToDSIndicator(ledIndicator);
                     if (dsInd != Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
                         if (parameters.HasLabel("color") && !parameters["color"].String().empty()) {
                             std::string color = parameters["color"].String();
@@ -435,7 +432,7 @@ namespace WPEFramework
                 auto* fpd = m_fpdAcquirer();
                 if (fpd) {
                     Exchange::IDeviceSettingsFPD::FPDIndicator dsInd =
-                        iarmNameToDSIndicator(ledIndicator);
+                        indicatorNameToDSIndicator(ledIndicator);
                     if (dsInd != Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
                         uint32_t blinkDuration = 0;
                         JsonArray patternList = blinkInfo["pattern"].Array();
@@ -515,9 +512,9 @@ namespace WPEFramework
 
         // ─── Per-indicator brightness helpers ─────────────────────────────────────
 
-        bool CFrontPanel::setBrightnessByName(const std::string& iarmName, int brightness)
+        bool CFrontPanel::setBrightnessByName(const std::string& indicatorName, int brightness)
         {
-            LOGINFO("setBrightnessByName: iarmName='%s' brightness=%d", iarmName.c_str(), brightness);
+            LOGINFO("setBrightnessByName: indicatorName='%s' brightness=%d", indicatorName.c_str(), brightness);
             stopBlinkTimer();
             if (!m_fpdAcquirer) {
                 LOGERR("setBrightnessByName: m_fpdAcquirer is null (DeviceSettings not yet activated)");
@@ -529,7 +526,7 @@ namespace WPEFramework
                 return false;
             }
             Exchange::IDeviceSettingsFPD::FPDIndicator dsInd =
-                iarmNameToDSIndicator(iarmName);
+                indicatorNameToDSIndicator(indicatorName);
             LOGINFO("setBrightnessByName: dsInd=%d (MAX=%d)",
                 static_cast<int>(dsInd),
                 static_cast<int>(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX));
@@ -540,19 +537,19 @@ namespace WPEFramework
                 ok = (rc == Core::ERROR_NONE);
                 LOGINFO("setBrightnessByName: SetFPDBrightness rc=%u ok=%s", rc, ok ? "true" : "false");
             } else {
-                LOGERR("setBrightnessByName: unknown iarmName='%s', no indicator found", iarmName.c_str());
+                LOGERR("setBrightnessByName: unknown indicatorName='%s', no indicator found", indicatorName.c_str());
             }
             fpd->Release();
             return ok;
         }
 
-        int CFrontPanel::getBrightnessByName(const std::string& iarmName)
+        int CFrontPanel::getBrightnessByName(const std::string& indicatorName)
         {
             if (m_fpdAcquirer) {
                 auto* fpd = m_fpdAcquirer();
                 if (fpd) {
                     Exchange::IDeviceSettingsFPD::FPDIndicator dsInd =
-                        iarmNameToDSIndicator(iarmName);
+                        indicatorNameToDSIndicator(indicatorName);
                     int result = globalLedBrightness;
                     if (dsInd != Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
                         uint32_t bright = 0;

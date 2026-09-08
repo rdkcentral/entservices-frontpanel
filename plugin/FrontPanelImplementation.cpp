@@ -18,13 +18,12 @@
 **/
 
 /**
- * @file DS_COMRPC/FrontPanelImplementation.cpp
+ * @file FrontPanelImplementation.cpp
  *
- * @brief COM-RPC DeviceSettings path for the FrontPanel plugin.
+ * @brief FrontPanel plugin implementation.
  *
- * Compiled when USE_DEVICESETTING_PLUGIN is defined.
  * Connects to entservices-devicesettings via COM-RPC (IDeviceSettingsFPD).
- * All actual FP HAL operations are delegated to CFrontPanel (helpers/DS_COMRPC/)
+ * All actual FP HAL operations are delegated to CFrontPanel (helpers/frontpanel.h)
  * which calls IDeviceSettingsFPD via the acquirer lambda set in
  * OnDeviceSettingsActivated().
  */
@@ -67,7 +66,7 @@ namespace
 {
     struct Mapping
     {
-        const char *IArmBusName;
+        const char *IndicatorName;
         const char *SvcManagerName;
     };
 
@@ -85,7 +84,7 @@ namespace
         while (name_mappings[i].SvcManagerName)
         {
             if (strcmp(s, name_mappings[i].SvcManagerName) == 0)
-                return name_mappings[i].IArmBusName;
+                return name_mappings[i].IndicatorName;
             i++;
         }
         return name;
