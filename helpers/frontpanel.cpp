@@ -139,6 +139,24 @@ namespace WPEFramework
             return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX;
         }
 
+        /** Map a color name to its packed 0xRRGGBB value. Returns false if unsupported. */
+        static bool colorNameToValue(const std::string& name, uint32_t& value)
+        {
+            std::string color = name;
+            std::transform(color.begin(), color.end(), color.begin(),
+                [](unsigned char character) { return std::tolower(character); });
+
+            if (color == "white")       value = 0xFFFFFF;
+            else if (color == "red")    value = 0xFF0000;
+            else if (color == "green")  value = 0x00FF00;
+            else if (color == "blue")   value = 0x0000FF;
+            else if (color == "yellow") value = 0xFFFFE0;
+            else if (color == "orange") value = 0xFF8C00;
+            else return false;
+
+            return true;
+        }
+
         } // end anonymous namespace
 
         /*static*/ std::string CFrontPanel::dsIndicatorToSvcName(
@@ -363,24 +381,8 @@ namespace WPEFramework
                         indicatorNameToDSIndicator(ledIndicator);
                     if (dsInd != Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
                         if (parameters.HasLabel("color") && !parameters["color"].String().empty()) {
-                            std::string color = parameters["color"].String();
-                            std::transform(color.begin(), color.end(), color.begin(),
-                                [](unsigned char character) { return std::tolower(character); });
-
                             uint32_t colorValue = 0;
-                            if (color == "white") {
-                                colorValue = 0xFFFFFF;
-                            } else if (color == "red") {
-                                colorValue = 0xFF0000;
-                            } else if (color == "green") {
-                                colorValue = 0x00FF00;
-                            } else if (color == "blue") {
-                                colorValue = 0x0000FF;
-                            } else if (color == "yellow") {
-                                colorValue = 0xFFFFE0;
-                            } else if (color == "orange") {
-                                colorValue = 0xFF8C00;
-                            } else {
+                            if (!colorNameToValue(parameters["color"].String(), colorValue)) {
                                 LOGERR("setLED: unsupported color '%s'", parameters["color"].String().c_str());
                                 fpd->Release();
                                 return false;
@@ -424,30 +426,53 @@ namespace WPEFramework
         void CFrontPanel::setBlink(const JsonObject& blinkInfo)
         {
             stopBlinkTimer();
+            m_blinkList.clear();
             string ledIndicator = svcToIndicatorName(blinkInfo["ledIndicator"].String());
             int iterations = 0;
             getNumberParameterObject(blinkInfo, "iterations", iterations);
 
-            if (m_fpdAcquirer) {
-                auto* fpd = m_fpdAcquirer();
-                if (fpd) {
-                    Exchange::IDeviceSettingsFPD::FPDIndicator dsInd =
-                        indicatorNameToDSIndicator(ledIndicator);
-                    if (dsInd != Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
-                        uint32_t blinkDuration = 0;
-                        JsonArray patternList = blinkInfo["pattern"].Array();
-                        if (patternList.Length() > 0) {
-                            JsonObject firstEntry = patternList[0].Object();
-                            int duration = 0;
-                            getNumberParameterObject(firstEntry, "duration", duration);
-                            blinkDuration = static_cast<uint32_t>(duration);
-                        }
-                        fpd->SetFPDBlink(dsInd, blinkDuration,
-                            static_cast<uint32_t>(iterations > 0 ? iterations : 1));
-                    }
-                    fpd->Release();
+            JsonArray patternList = blinkInfo["pattern"].Array();
+            for (int i = 0; i < patternList.Length(); i++)
+            {
+                JsonObject frontPanelBlinkHash = patternList[i].Object();
+                FrontPanelBlinkInfo frontPanelBlinkInfo;
+                frontPanelBlinkInfo.ledIndicator = ledIndicator;
+
+                int brightness = -1;
+                if (frontPanelBlinkHash.HasLabel("brightness"))
+                    getNumberParameterObject(frontPanelBlinkHash, "brightness", brightness);
+
+                int duration = 0;
+                getNumberParameterObject(frontPanelBlinkHash, "duration", duration);
+                LOGWARN("setBlink ledIndicator: %s iterations: %d brightness: %d duration: %d",
+                    ledIndicator.c_str(), iterations, brightness, duration);
+
+                frontPanelBlinkInfo.brightness = brightness;
+                frontPanelBlinkInfo.durationInMs = duration;
+                frontPanelBlinkInfo.colorValue = 0;
+                if (frontPanelBlinkHash.HasLabel("color")) //color mode 2
+                {
+                    frontPanelBlinkInfo.colorName = frontPanelBlinkHash["color"].String();
+                    frontPanelBlinkInfo.colorMode = 2;
                 }
+                else if (frontPanelBlinkHash.HasLabel("red")) //color mode 1
+                {
+                    unsigned int red = 0, green = 0, blue = 0;
+
+                    getNumberParameterObject(frontPanelBlinkHash, "red", red);
+                    getNumberParameterObject(frontPanelBlinkHash, "green", green);
+                    getNumberParameterObject(frontPanelBlinkHash, "blue", blue);
+
+                    frontPanelBlinkInfo.colorValue = (red << 16) | (green << 8) | blue;
+                    frontPanelBlinkInfo.colorMode = 1;
+                }
+                else
+                {
+                    frontPanelBlinkInfo.colorMode = 0;
+                }
+                m_blinkList.push_back(std::move(frontPanelBlinkInfo));
             }
+            startBlinkTimer(iterations);
         } // end CFrontPanel::setBlink
 
         void CFrontPanel::startBlinkTimer(int numberOfBlinkRepeats)
@@ -475,6 +500,44 @@ namespace WPEFramework
 
         void CFrontPanel::setBlinkLed(FrontPanelBlinkInfo blinkInfo)
         {
+            if (!m_fpdAcquirer) {
+                LOGERR("setBlinkLed: m_fpdAcquirer is null (DeviceSettings not yet activated)");
+                return;
+            }
+            auto* fpd = m_fpdAcquirer();
+            if (!fpd) {
+                LOGERR("setBlinkLed: IDeviceSettingsFPD interface not available");
+                return;
+            }
+
+            Exchange::IDeviceSettingsFPD::FPDIndicator dsInd =
+                indicatorNameToDSIndicator(blinkInfo.ledIndicator);
+            if (dsInd == Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
+                LOGERR("setBlinkLed: unknown ledIndicator='%s'", blinkInfo.ledIndicator.c_str());
+                fpd->Release();
+                return;
+            }
+
+            if (blinkInfo.colorMode == 1) {
+                fpd->SetFPDColor(dsInd, blinkInfo.colorValue);
+            } else if (blinkInfo.colorMode == 2) {
+                uint32_t colorValue = 0;
+                if (colorNameToValue(blinkInfo.colorName, colorValue))
+                    fpd->SetFPDColor(dsInd, colorValue);
+                else
+                    LOGWARN("setBlinkLed: unsupported color '%s'", blinkInfo.colorName.c_str());
+            }
+
+            int brightness = blinkInfo.brightness;
+            if (brightness == -1) {
+                uint32_t bright = 0;
+                if (fpd->GetFPDBrightness(dsInd, bright, true) == Core::ERROR_NONE)
+                    brightness = static_cast<int>(bright);
+            }
+            if (brightness >= 0)
+                fpd->SetFPDBrightness(dsInd, static_cast<uint32_t>(brightness), false);
+
+            fpd->Release();
         }
 
         void CFrontPanel::onBlinkTimer()
