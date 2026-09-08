@@ -138,21 +138,33 @@ namespace WPEFramework
             return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX;
         }
 
-        /** Map a color name to its packed 0xRRGGBB value. Returns false if unsupported. */
+        /** Resolve a color name or "#RRGGBB"/"0xRRGGBB"/"RRGGBB" literal to a packed
+         *  0xRRGGBB value. Hex is accepted because getFrontPanelLights advertises the
+         *  supported colors in that form. Returns false if unrecognised. */
         static bool colorNameToValue(const std::string& name, uint32_t& value)
         {
             std::string color = name;
             std::transform(color.begin(), color.end(), color.begin(),
                 [](unsigned char character) { return std::tolower(character); });
 
-            if (color == "white")       value = 0xFFFFFF;
-            else if (color == "red")    value = 0xFF0000;
-            else if (color == "green")  value = 0x00FF00;
-            else if (color == "blue")   value = 0x0000FF;
-            else if (color == "yellow") value = 0xFFFFE0;
-            else if (color == "orange") value = 0xFF8C00;
-            else return false;
+            if (color == "white")       { value = 0xFFFFFF; return true; }
+            else if (color == "red")    { value = 0xFF0000; return true; }
+            else if (color == "green")  { value = 0x00FF00; return true; }
+            else if (color == "blue")   { value = 0x0000FF; return true; }
+            else if (color == "yellow") { value = 0xFFFFE0; return true; }
+            else if (color == "orange") { value = 0xFF8C00; return true; }
 
+            std::string hex = color;
+            if (hex.compare(0, 1, "#") == 0)
+                hex.erase(0, 1);
+            else if (hex.compare(0, 2, "0x") == 0)
+                hex.erase(0, 2);
+
+            if (hex.size() != 6 ||
+                hex.find_first_not_of("0123456789abcdef") != std::string::npos)
+                return false;
+
+            value = static_cast<uint32_t>(std::stoul(hex, nullptr, 16));
             return true;
         }
 
