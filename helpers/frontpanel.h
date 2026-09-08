@@ -18,12 +18,13 @@
 **/
 
 /**
-* @defgroup servicemanager
-* @{
-* @defgroup include
-* @{
-**/
-
+ * @file helpers/frontpanel.h
+ *
+ * @brief CFrontPanel helper.
+ *
+ * All HAL calls go through IDeviceSettingsFPD acquired via the injected acquirer
+ * lambda (set by FrontPanelImplementation::OnDeviceSettingsActivated).
+ */
 
 #ifndef FRONTPANEL_H
 #define FRONTPANEL_H
@@ -31,15 +32,16 @@
 #include <string>
 #include <list>
 #include <vector>
+#include <functional>
 
 #include <plugins/plugins.h>
+#include "DeviceSettingsInterface.h"
+#include <interfaces/IDeviceSettingsFPD.h>
 
 namespace WPEFramework
 {
-
     namespace Plugin
     {
-
         class FrontPanelImplementation;
         class CFrontPanel;
 
@@ -50,19 +52,13 @@ namespace WPEFramework
             BlinkInfo& operator=(const BlinkInfo& RHS) = delete;
 
         public:
-            BlinkInfo(CFrontPanel* fp)
-            : m_frontPanel(fp)
-            {
-            }
-            BlinkInfo(const BlinkInfo& copy)
-            : m_frontPanel(copy.m_frontPanel)
-            {
-            }
+            BlinkInfo(CFrontPanel* fp) : m_frontPanel(fp) {}
+            BlinkInfo(const BlinkInfo& copy) : m_frontPanel(copy.m_frontPanel) {}
             ~BlinkInfo() {}
 
             inline bool operator==(const BlinkInfo& RHS) const
             {
-                return(m_frontPanel == RHS.m_frontPanel);
+                return (m_frontPanel == RHS.m_frontPanel);
             }
 
         public:
@@ -71,7 +67,6 @@ namespace WPEFramework
         private:
             CFrontPanel* m_frontPanel;
         };
-
 
         typedef struct _FrontPanelBlinkInfo
         {
@@ -97,15 +92,15 @@ namespace WPEFramework
         class CFrontPanel
         {
         public:
-            static CFrontPanel* instance(PluginHost::IShell *service = nullptr);
+            static CFrontPanel* instance(PluginHost::IShell* service = nullptr);
             static void deinitialize();
             bool start();
             bool stop();
             std::string getLastError();
             void addEventObserver(FrontPanelImplementation* o);
             void removeEventObserver(FrontPanelImplementation* o);
-            bool setBrightness(int fp_brighness);
-            int getBrightness();
+            bool setBrightness(int fp_brightness);
+            int  getBrightness();
             bool powerOffLed(frontPanelIndicator fp_indicator);
             bool powerOnLed(frontPanelIndicator fp_indicator);
             bool powerOffAllLed();
@@ -115,30 +110,48 @@ namespace WPEFramework
             void setBlink(const JsonObject& blinkInfo);
             void loadPreferences();
             void stopBlinkTimer();
-
             void onBlinkTimer();
             static int initDone;
+
+            // Per-indicator brightness helpers
+            bool setBrightnessByName(const std::string& indicatorName, int brightness);
+            int  getBrightnessByName(const std::string& indicatorName);
+
+            // ── COM-RPC DS lifecycle ─────────────────────────────────────────────
+            /**
+             * Provide a factory that yields an AddRef'd IDeviceSettingsFPD* on demand.
+             * CFrontPanel calls it per operation and Release()s immediately.
+             */
+            void setFPDAcquirer(std::function<Exchange::IDeviceSettingsFPD*()> acquirer);
+
+            /** Drop the acquirer. */
+            void clearFPDInterface();
+
+            /** Map DS FPDIndicator enum to the service-manager LED name.
+             *  Public so FrontPanelImplementation can use it for config lookups. */
+            static std::string dsIndicatorToSvcName(Exchange::IDeviceSettingsFPD::FPDIndicator ind);
 
         private:
             CFrontPanel();
             static CFrontPanel* s_instance;
             void startBlinkTimer(int numberOfBlinkRepeats);
             void setBlinkLed(FrontPanelBlinkInfo blinkInfo);
-            JsonObject m_preferencesHash;  // is this needed
+            JsonObject m_preferencesHash;
 
             BlinkInfo m_blinkTimer;
             bool m_isBlinking;
             std::vector<FrontPanelBlinkInfo> m_blinkList;
             std::list<FrontPanelImplementation*> observers_;
-
             std::string lastError_;
+
+            /** Per-operation acquirer for IDeviceSettingsFPD. */
+            std::function<Exchange::IDeviceSettingsFPD*()> m_fpdAcquirer;
         };
+
     } // namespace Plugin
 } // namespace WPEFramework
 
-
 #endif
-
 
 /** @} */
 /** @} */
