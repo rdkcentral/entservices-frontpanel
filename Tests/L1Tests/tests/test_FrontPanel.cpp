@@ -35,6 +35,11 @@
 #include "PowerManagerMock.h"
 #include "ThunderPortability.h"
 
+// Previously pulled in transitively via IarmBusMock.h (no longer included).
+#ifndef TEST_LOG
+#define TEST_LOG(x, ...) fprintf(stderr, "\033[1;32m[%s:%d](%s)<PID:%d><TID:%d>" x "\n\033[0m", __FILE__, __LINE__, __FUNCTION__, getpid(), gettid(), ##__VA_ARGS__); fflush(stderr);
+#endif
+
 using namespace WPEFramework;
 using IPowerManager = Exchange::IPowerManager;
 using FPD = Exchange::IDeviceSettingsFPD;
