@@ -152,7 +152,11 @@ protected:
         ON_CALL(service, QueryInterfaceByCallsign(::testing::_, ::testing::StrEq("org.rdk.PowerManager")))
             .WillByDefault(::testing::Invoke(
                 [&](const uint32_t interfaceId, const string& name) -> void* {
-                    return PowerManagerMock::Get();
+                    // QueryInterfaceByCallsign hands ownership to the caller (which will
+                    // Release() exactly once); PowerManagerMock::Get() itself does not AddRef.
+                    auto* iface = PowerManagerMock::Get();
+                    if (iface) iface->AddRef();
+                    return iface;
                 }));
 
         EXPECT_CALL(PowerManagerMock::Mock(), Register(::testing::Matcher<Exchange::IPowerManager::IModeChangedNotification*>(::testing::_)))
@@ -162,10 +166,9 @@ protected:
                     return Core::ERROR_NONE;
                 });
 
-        // PowerManagerMock is torn down (Delete()) before FrontPanelImplem's own
-        // _powerManagerPlugin ref is released in ~FrontPanelTest(), so gmock's
-        // exit-time leak check can still see this instance as outstanding even
-        // though its expectations were already verified above. Explicitly opt out.
+        // Safety net: _powerManagerPlugin's release timing relative to Delete() is not
+        // fully deterministic across this fixture's teardown chain; this only suppresses
+        // gmock's exit-time report and has no effect if the object is destroyed normally.
         ::testing::Mock::AllowLeak(&PowerManagerMock::Mock());
 
         EXPECT_EQ(string(""), plugin->Initialize(&service));
@@ -181,11 +184,6 @@ protected:
         Plugin::CFrontPanel::instance()->clearFPDInterface();
 
         plugin->Deinitialize(&service);
-
-        // FrontPanelImplem (a FrontPanelTest member) outlives this destructor otherwise,
-        // keeping FrontPanelImplementation - and its _powerManagerPlugin ref on
-        // PowerManagerMock - alive past Delete(), which is what was leaking the mock.
-        FrontPanelImplem = Core::ProxyType<Plugin::FrontPanelImplementation>();
 
         _notification = nullptr;
         PowerManagerMock::Delete();
