@@ -34,9 +34,9 @@ namespace Exchange = WPEFramework::Exchange;
  * @brief gmock for Exchange::IDeviceSettingsFPD, the COM-RPC interface CFrontPanel
  *        acquires via CFrontPanel::setFPDAcquirer() (see helpers/frontpanel.cpp).
  *
- * Mirrors the Core::ProxyType<T> pattern used by PowerManagerMock so AddRef()/Release()
- * (pure virtuals inherited from Core::IUnknown) work correctly without hand-rolled
- * reference counting.
+ * Uses manual reference counting (not Core::ProxyType<T>) so lifetime is fully
+ * deterministic: Get() hands out one ref owned by mockInstances(), Delete() drops
+ * it, and the object deletes itself when the count reaches zero.
  */
 class FrontPanelFPDMock : public Exchange::IDeviceSettingsFPD {
 
@@ -60,13 +60,32 @@ public:
     MOCK_METHOD(Core::hresult, SetFPDTimeFormat, (const FPDTimeFormat fpdTimeFormat), (override));
     MOCK_METHOD(Core::hresult, SetFPDMode, (const FPDMode fpdMode), (override));
 
-    BEGIN_INTERFACE_MAP(FrontPanelFPDMock)
-    INTERFACE_ENTRY(Exchange::IDeviceSettingsFPD)
-    END_INTERFACE_MAP
-
-    static std::map<std::string, Core::ProxyType<Exchange::IDeviceSettingsFPD>>& mockInstances()
+    uint32_t AddRef() const override
     {
-        static std::map<std::string, Core::ProxyType<Exchange::IDeviceSettingsFPD>> mocks;
+        return ++_refCount;
+    }
+
+    uint32_t Release() const override
+    {
+        uint32_t result = --_refCount;
+        if (result == 0) {
+            delete this;
+        }
+        return result;
+    }
+
+    void* QueryInterface(const uint32_t interfaceNumber) override
+    {
+        if ((interfaceNumber == Core::IUnknown::ID) || (interfaceNumber == Exchange::IDeviceSettingsFPD::ID)) {
+            AddRef();
+            return static_cast<void*>(static_cast<Exchange::IDeviceSettingsFPD*>(this));
+        }
+        return nullptr;
+    }
+
+    static std::map<std::string, FrontPanelFPDMock*>& mockInstances()
+    {
+        static std::map<std::string, FrontPanelFPDMock*> mocks;
         return mocks;
     }
 
@@ -88,12 +107,13 @@ public:
 
         auto it = mocks.find(id);
         if (it == mocks.end()) {
-            mocks.insert(std::pair<std::string, Core::ProxyType<FrontPanelFPDMock>>(id, Core::ProxyType<FrontPanelFPDMock>::Create()));
+            // Refcount starts at 1: this single ref is owned by mockInstances().
+            mocks.insert(std::pair<std::string, FrontPanelFPDMock*>(id, new FrontPanelFPDMock()));
             it = mocks.find(id);
             ASSERT(it != mocks.end());
         }
 
-        return &(*(it->second));
+        return it->second;
     }
 
     static FrontPanelFPDMock& Mock()
@@ -111,8 +131,12 @@ public:
 
         auto it = mocks.find(id);
         if (it != mocks.end()) {
-            // ProxyType<> Release gets called on destructor
+            // Drop mockInstances()' owning ref; deletes the object when it reaches zero.
+            it->second->Release();
             mocks.erase(it);
         }
     }
+
+private:
+    mutable uint32_t _refCount = 1;
 };
