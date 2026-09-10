@@ -115,6 +115,10 @@ protected:
             dispatcher = nullptr;
         }
 
+        workerPool->Stop();
+        Core::IWorkerPool::Assign(nullptr);
+        workerPool.Release();
+
         // Restore global factory hooks
         PluginHost::IFactories::Assign(nullptr);
 
@@ -181,9 +185,7 @@ protected:
     }
     virtual ~FrontPanelInitializedTest() override
     {
-        // CFrontPanel is a process-wide singleton that outlives this test; revoke any
-        // blink timer a test (e.g. setBlink) scheduled so it can't fire on a worker
-        // thread after this fixture's mocks are gone, crashing at process exit.
+        // Revoke timers while their mock dependencies are still alive.
         Plugin::CFrontPanel::instance()->stop();
 
         Plugin::CFrontPanel::instance()->clearFPDInterface();
