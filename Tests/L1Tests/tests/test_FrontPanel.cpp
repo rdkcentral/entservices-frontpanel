@@ -176,6 +176,11 @@ protected:
 
         plugin->Deinitialize(&service);
 
+        // FrontPanelImplem (a FrontPanelTest member) outlives this destructor otherwise,
+        // keeping FrontPanelImplementation - and its _powerManagerPlugin ref on
+        // PowerManagerMock - alive past Delete(), which is what was leaking the mock.
+        FrontPanelImplem = Core::ProxyType<Plugin::FrontPanelImplementation>();
+
         _notification = nullptr;
         PowerManagerMock::Delete();
         FrontPanelFPDMock::Delete();
@@ -438,8 +443,9 @@ TEST_F(FrontPanelInitializedEventDsTest, setLEDMode2)
 TEST_F(FrontPanelInitializedEventDsTest, setLEDUnsupportedColor)
 {
     // Unrecognised color name (not a known name or #RRGGBB literal) fails setLED.
-    EXPECT_EQ(Core::ERROR_NONE, handler.Invoke(connection, _T("setLED"), _T("{\"ledIndicator\": \"power_led\", \"brightness\": 50, \"color\": \"purple\"}"), response));
-    EXPECT_EQ(response, string("{\"success\":false}"));
+    // Unlike SetBrightness/SetBlink, SetLED's hresult reflects failure (ERROR_GENERAL),
+    // so the JSON-RPC layer never serializes a "{"success":false}" body.
+    EXPECT_EQ(Core::ERROR_GENERAL, handler.Invoke(connection, _T("setLED"), _T("{\"ledIndicator\": \"power_led\", \"brightness\": 50, \"color\": \"purple\"}"), response));
 }
 
 // --- Negative / direct CFrontPanel test cases ---
