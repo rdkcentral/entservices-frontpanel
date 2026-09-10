@@ -162,6 +162,12 @@ protected:
                     return Core::ERROR_NONE;
                 });
 
+        // PowerManagerMock is torn down (Delete()) before FrontPanelImplem's own
+        // _powerManagerPlugin ref is released in ~FrontPanelTest(), so gmock's
+        // exit-time leak check can still see this instance as outstanding even
+        // though its expectations were already verified above. Explicitly opt out.
+        ::testing::Mock::AllowLeak(&PowerManagerMock::Mock());
+
         EXPECT_EQ(string(""), plugin->Initialize(&service));
 
         p_fpdMock = static_cast<FrontPanelFPDMock*>(FrontPanelFPDMock::Get());
