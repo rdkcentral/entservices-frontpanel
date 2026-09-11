@@ -192,6 +192,10 @@ protected:
 
         plugin->Deinitialize(&service);
 
+        // Drop the test-owned implementation proxy while its worker pool and mocks
+        // are still alive; its destructor closes DSHelper and unregisters PowerManager.
+        FrontPanelImplem = Core::ProxyType<Plugin::FrontPanelImplementation>();
+
         _notification = nullptr;
         PowerManagerMock::Delete();
         FrontPanelFPDMock::Delete();
