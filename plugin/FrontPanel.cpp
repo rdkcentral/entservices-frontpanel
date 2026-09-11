@@ -20,11 +20,7 @@
 #include "FrontPanel.h"
 #include <algorithm>
 
-
-#include "libIBus.h"
-
 #include "UtilsJsonRpc.h"
-#include "UtilsIarm.h"
 
 #define API_VERSION_NUMBER_MAJOR 1
 #define API_VERSION_NUMBER_MINOR 0

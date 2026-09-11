@@ -24,23 +24,15 @@
 * @{
 **/
 
-//#define USE_DS //TODO - this was defined in servicemanager.pro for all STB builds.  Not sure where to put it except here for now
-//#define HAS_API_POWERSTATE
-
 #include "frontpanel.h"
-#ifdef USE_DS
-    #include "frontPanelConfig.hpp"
-    #include "frontPanelTextDisplay.hpp"
-    #include "manager.hpp"
-#endif
 
 #include <time.h>
 #include <stdio.h>
 #include <string.h>
 #include <algorithm>
+#include <cctype>
 
 #if defined(HAS_API_POWERSTATE)
-#include "libIBus.h"
 #include <interfaces/IPowerManager.h>
 
 using namespace WPEFramework;
@@ -71,16 +63,12 @@ namespace WPEFramework
         static int globalLedBrightness = 100;
 
         int CFrontPanel::initDone = 0;
-        static bool isMessageLedOn = false;
-        static bool isRecordLedOn = false;
 
         static bool powerStatus = false;     //Check how this works on xi3 and rng's
         static bool started = false;
         static int m_numberOfBlinks = 0;
         static int m_maxNumberOfBlinkRepeats = 0;
         static int m_currentBlinkListIndex = 0;
-        static std::vector<std::string> m_lights;
-        static device::List <device::FrontPanelIndicator> fpIndicators;
         static PowerManagerInterfaceRef _powerManagerPlugin;
 
         static Core::TimerType<BlinkInfo> blinkTimer(64 * 1024, "BlinkTimer");
@@ -90,7 +78,7 @@ namespace WPEFramework
 
             struct Mapping
             {
-                const char *IArmBusName;
+                const char *IndicatorName;
                 const char *SvcManagerName;
             };
 
@@ -99,11 +87,11 @@ namespace WPEFramework
                 { "Message" , "data_led"},
                 { "Power" , "power_led"},
                 // TODO: add your mappings here
-                // { <IARM_NAME>, <SVC_MANAGER_API_NAME> },
+                // { <INDICATOR_NAME>, <SVC_MANAGER_API_NAME> },
                 { 0,  0}
             };
 
-            std::string svc2iarm(const std::string &name)
+            std::string svcToIndicatorName(const std::string &name)
             {
                 const char *s = name.c_str();
 
@@ -111,10 +99,87 @@ namespace WPEFramework
                 while (name_mappings[i].SvcManagerName)
                 {
                     if (strcmp(s, name_mappings[i].SvcManagerName) == 0)
-                        return name_mappings[i].IArmBusName;
+                        return name_mappings[i].IndicatorName;
                     i++;
                 }
                 return name;
+            }
+
+
+        /** Map the legacy frontPanelIndicator enum to the DS FPDIndicator enum. */
+        static Exchange::IDeviceSettingsFPD::FPDIndicator legacyToDSIndicator(
+            frontPanelIndicator ind)
+        {
+            switch (ind) {
+            case FRONT_PANEL_INDICATOR_MESSAGE:  return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MESSAGE;
+            case FRONT_PANEL_INDICATOR_POWER:    return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_POWER;
+            case FRONT_PANEL_INDICATOR_RECORD:   return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_RECORD;
+            case FRONT_PANEL_INDICATOR_REMOTE:   return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_REMOTE;
+            case FRONT_PANEL_INDICATOR_RFBYPASS: return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_RFBYPASS;
+            default:                              return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX;
+            }
+        }
+
+        /** Map an indicator name (e.g. "Message") or numeric index string to the DS FPDIndicator enum. */
+        static Exchange::IDeviceSettingsFPD::FPDIndicator indicatorNameToDSIndicator(
+            const std::string& name)
+        {
+            if (name == "Message")  return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MESSAGE;
+            if (name == "Power")    return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_POWER;
+            if (name == "Record")   return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_RECORD;
+            if (name == "Remote")   return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_REMOTE;
+            if (name == "RfByPass") return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_RFBYPASS;
+            // Fallback: treat as numeric indicator index (e.g. "0"=Message, "1"=Power, "2"=Record)
+            try {
+                int idx = std::stoi(name);
+                if (idx >= 0 && idx < static_cast<int>(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX))
+                    return static_cast<Exchange::IDeviceSettingsFPD::FPDIndicator>(idx);
+            } catch (...) {}
+            return Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX;
+        }
+
+        /** Resolve a color name or "#RRGGBB"/"0xRRGGBB"/"RRGGBB" literal to a packed
+         *  0xRRGGBB value. Hex is accepted because getFrontPanelLights advertises the
+         *  supported colors in that form. Returns false if unrecognised. */
+        static bool colorNameToValue(const std::string& name, uint32_t& value)
+        {
+            std::string color = name;
+            std::transform(color.begin(), color.end(), color.begin(),
+                [](unsigned char character) { return std::tolower(character); });
+
+            if (color == "white")       { value = 0xFFFFFF; return true; }
+            else if (color == "red")    { value = 0xFF0000; return true; }
+            else if (color == "green")  { value = 0x00FF00; return true; }
+            else if (color == "blue")   { value = 0x0000FF; return true; }
+            else if (color == "yellow") { value = 0xFFFFE0; return true; }
+            else if (color == "orange") { value = 0xFF8C00; return true; }
+
+            std::string hex = color;
+            if (hex.compare(0, 1, "#") == 0)
+                hex.erase(0, 1);
+            else if (hex.compare(0, 2, "0x") == 0)
+                hex.erase(0, 2);
+
+            if (hex.size() != 6 ||
+                hex.find_first_not_of("0123456789abcdef") != std::string::npos)
+                return false;
+
+            value = static_cast<uint32_t>(std::stoul(hex, nullptr, 16));
+            return true;
+        }
+
+        } // end anonymous namespace
+
+        /*static*/ std::string CFrontPanel::dsIndicatorToSvcName(
+            Exchange::IDeviceSettingsFPD::FPDIndicator ind)
+        {
+            switch (ind) {
+            case Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MESSAGE:  return "data_led";
+            case Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_POWER:    return "power_led";
+            case Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_RECORD:   return "record_led";
+            case Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_REMOTE:   return "remote_led";
+            case Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_RFBYPASS: return "rfbypass_led";
+            default:                                                        return "";
             }
         }
 
@@ -138,77 +203,70 @@ namespace WPEFramework
                 }
                 if (!s_instance)
                     s_instance = new CFrontPanel;
-#ifdef USE_DS
-                try
-                {
-                    LOGINFO("Initializing device manager");
-                    device::Manager::Initialize();
 
-                    LOGINFO("Front panel init");
-                    fpIndicators = device::FrontPanelConfig::getInstance().getIndicators();
-
-                    for (uint i = 0; i < fpIndicators.size(); i++)
-                    {
-                        std::string IndicatorNameIarm = fpIndicators.at(i).getName();
-
-                        auto it = std::find(m_lights.begin(), m_lights.end(), IndicatorNameIarm);
-                        if (m_lights.end() == it)
-                        {
-                            m_lights.push_back(std::move(IndicatorNameIarm));
-                        }
-                    }
-
-#if defined(HAS_API_POWERSTATE)
-                    {
-                        Core::hresult res = Core::ERROR_GENERAL;
-                        PowerState pwrStateCur = WPEFramework::Exchange::IPowerManager::POWER_STATE_UNKNOWN;
-                        PowerState pwrStatePrev = WPEFramework::Exchange::IPowerManager::POWER_STATE_UNKNOWN;
-                        ASSERT (_powerManagerPlugin);
-                        if (_powerManagerPlugin) {
-                            res = _powerManagerPlugin->GetPowerState(pwrStateCur, pwrStatePrev);
-                            if (Core::ERROR_NONE == res)
-                            {
-                                if (pwrStateCur == WPEFramework::Exchange::IPowerManager::POWER_STATE_ON)
-                                    powerStatus = true;
-                            }
-                            LOGINFO("pwrStateCur[%d] pwrStatePrev[%d] powerStatus[%d]", pwrStateCur, pwrStatePrev, powerStatus);
-                        }
-                    }
-#endif
-
-                    globalLedBrightness = device::FrontPanelIndicator::getInstance("Power").getBrightness();
-                    LOGINFO("Power light brightness, %d, power status %d", globalLedBrightness, powerStatus);
-
-		    profileType = searchRdkProfile();
-		    if (TV != profileType)
-		    {
-                        for (uint i = 0; i < fpIndicators.size(); i++)
-			{
-                            LOGWARN("Initializing light %s", fpIndicators.at(i).getName().c_str());
-			    if (powerStatus)
-                                device::FrontPanelIndicator::getInstance(fpIndicators.at(i).getName()).setBrightness(globalLedBrightness, false);
-
-			    device::FrontPanelIndicator::getInstance(fpIndicators.at(i).getName()).setState(false);
-			}
-		    }
-		    else
-		    {
-                        LOGWARN("Power LED Initializing is not set since we continue with bootloader patern");
-		    }
-
-		    if (powerStatus)
-                        device::FrontPanelIndicator::getInstance("Power").setState(true);
-
-                }
-                catch (...)
-                {
-                    LOGERR("Exception Caught during [CFrontPanel::instance]\r\n");
-                }
-                initDone=1;
-#endif
+                initDone = 1;
             }
 
             return s_instance;
+        }
+
+        void CFrontPanel::initializeFPD()
+        {
+            auto* fpd = acquireFPD();
+            if (!fpd) {
+                LOGERR("initializeFPD: IDeviceSettingsFPD interface not available");
+                return;
+            }
+
+#if defined(HAS_API_POWERSTATE)
+            {
+                Core::hresult res = Core::ERROR_GENERAL;
+                PowerState pwrStateCur  = Exchange::IPowerManager::POWER_STATE_UNKNOWN;
+                PowerState pwrStatePrev = Exchange::IPowerManager::POWER_STATE_UNKNOWN;
+                ASSERT (_powerManagerPlugin);
+                if (_powerManagerPlugin) {
+                    res = _powerManagerPlugin->GetPowerState(pwrStateCur, pwrStatePrev);
+                    if (Core::ERROR_NONE == res)
+                    {
+                        if (pwrStateCur == Exchange::IPowerManager::POWER_STATE_ON)
+                            powerStatus = true;
+                    }
+                    LOGINFO("pwrStateCur[%d] pwrStatePrev[%d] powerStatus[%d]", pwrStateCur, pwrStatePrev, powerStatus);
+                }
+            }
+#endif
+
+            uint32_t bright = 0;
+            if (fpd->GetFPDBrightness(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_POWER,
+                    bright, false) == Core::ERROR_NONE)
+                globalLedBrightness = static_cast<int>(bright);
+            LOGINFO("Power light brightness, %d, power status %d", globalLedBrightness, powerStatus);
+
+            profileType = searchRdkProfile();
+            if (TV != profileType)
+            {
+                for (uint8_t i = 0;
+                     i < static_cast<uint8_t>(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX);
+                     ++i)
+                {
+                    auto ind = static_cast<Exchange::IDeviceSettingsFPD::FPDIndicator>(i);
+                    LOGWARN("Initializing light %s", dsIndicatorToSvcName(ind).c_str());
+                    if (powerStatus)
+                        fpd->SetFPDBrightness(ind, static_cast<uint32_t>(globalLedBrightness), false);
+
+                    fpd->SetFPDState(ind, Exchange::IDeviceSettingsFPD::DS_FPD_STATE_OFF);
+                }
+            }
+            else
+            {
+                LOGWARN("Power LED Initializing is not set since we continue with bootloader patern");
+            }
+
+            if (powerStatus)
+                fpd->SetFPDState(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_POWER,
+                    Exchange::IDeviceSettingsFPD::DS_FPD_STATE_ON);
+
+            fpd->Release();
         }
 
 
@@ -224,42 +282,12 @@ namespace WPEFramework
                 delete s_instance;
                 s_instance = nullptr;
             }
-#ifdef USE_DS
-            try
-            {
-                device::Manager::DeInitialize();
-                LOGINFO("device::Manager::DeInitialize success");
-            }
-            catch(const std::exception& e)
-            {
-                LOGERR("device::Manager::DeInitialize failed, Exception: {%s}", e.what());
-            }
-#endif
             initDone = 0;
         }
 
         bool CFrontPanel::start()
         {
             LOGWARN("Front panel start");
-            try
-            {
-                if (powerStatus)
-                    device::FrontPanelIndicator::getInstance("Power").setState(true);
-
-                device::List <device::FrontPanelIndicator> fpIndicators = device::FrontPanelConfig::getInstance().getIndicators();
-                for (uint i = 0; i < fpIndicators.size(); i++)
-                {
-                    std::string IndicatorNameIarm = fpIndicators.at(i).getName();
-
-                    auto it = std::find(m_lights.begin(), m_lights.end(), IndicatorNameIarm);
-                    if (m_lights.end() == it)
-                        m_lights.push_back(std::move(IndicatorNameIarm));
-                }
-            }
-            catch (...)
-            {
-                LOGERR("Frontpanel Exception Caught during [%s]\r\n", __func__);
-            }
             if (!started)
             {
                 m_numberOfBlinks = 0;
@@ -305,127 +333,90 @@ namespace WPEFramework
             stopBlinkTimer();
             globalLedBrightness = fp_brightness;
 
-            try
-            {
-                for (uint i = 0; i < fpIndicators.size(); i++)
-                {
-                    device::FrontPanelIndicator::getInstance(fpIndicators.at(i).getName()).setBrightness(globalLedBrightness);
+            auto* fpd = acquireFPD();
+            if (fpd) {
+                bool allOk = true;
+                for (uint8_t i = 0;
+                     i < static_cast<uint8_t>(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX);
+                     ++i) {
+                    auto rc = fpd->SetFPDBrightness(
+                        static_cast<Exchange::IDeviceSettingsFPD::FPDIndicator>(i),
+                        static_cast<uint32_t>(fp_brightness), true);
+                    if (rc != Core::ERROR_NONE) allOk = false;
                 }
+                fpd->Release();
+                return allOk;
             }
-            catch (...)
-            {
-                LOGERR("Frontpanel Exception Caught during [%s]\r\n",__func__);
-            }
-
-            powerOnLed(FRONT_PANEL_INDICATOR_ALL);
-            return true;
+            return false;
         }
 
         int CFrontPanel::getBrightness()
         {
-            try
-            {
-                globalLedBrightness = device::FrontPanelIndicator::getInstance("Power").getBrightness();
-                LOGWARN("Power light brightness, %d\n", globalLedBrightness);
+            auto* fpd = acquireFPD();
+            if (fpd) {
+                uint32_t bright = 0;
+                fpd->GetFPDBrightness(
+                    Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_POWER, bright, false);
+                fpd->Release();
+                globalLedBrightness = static_cast<int>(bright);
             }
-            catch (...)
-            {
-                LOGERR("Frontpanel Exception Caught during [%s]\r\n", __func__);
-            }
-
             return globalLedBrightness;
         }
 
         bool CFrontPanel::powerOnLed(frontPanelIndicator fp_indicator)
         {
             stopBlinkTimer();
-            try
-            {
-                if (powerStatus)
-                {
-                    switch (fp_indicator)
-                    {
-                    case FRONT_PANEL_INDICATOR_MESSAGE:
-                        isMessageLedOn = true;
-                        device::FrontPanelIndicator::getInstance("Message").setState(true);
-                        break;
-                    case FRONT_PANEL_INDICATOR_RECORD:
-                        isRecordLedOn = true;
-                        device::FrontPanelIndicator::getInstance("Record").setState(true);
-                        break;
-                    case FRONT_PANEL_INDICATOR_REMOTE:
-                        device::FrontPanelIndicator::getInstance("Remote").setState(true);
-                        break;
-                    case FRONT_PANEL_INDICATOR_RFBYPASS:
-                        device::FrontPanelIndicator::getInstance("RfByPass").setState(true);
-                        break;
-                    case FRONT_PANEL_INDICATOR_ALL:
-                        if (isMessageLedOn)
-                            device::FrontPanelIndicator::getInstance("Message").setState(true);
-                        if (isRecordLedOn)
-                            device::FrontPanelIndicator::getInstance("Record").setState(true);
-                        device::FrontPanelIndicator::getInstance("Power").setState(true);
-                        break;
-                    case FRONT_PANEL_INDICATOR_POWER:
-                        //LOGWARN("CFrontPanel::powerOnLed() - FRONT_PANEL_INDICATOR_POWER not handled");
-			device::FrontPanelIndicator::getInstance("Power").setState(true);
-                        break;
-                    default:
-                        LOGERR("Invalid Indicator %d", fp_indicator);
+            auto* fpd = acquireFPD();
+            if (fpd) {
+                bool ok = true;
+                if (fp_indicator == FRONT_PANEL_INDICATOR_ALL) {
+                    for (uint8_t i = 0;
+                         i < static_cast<uint8_t>(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX);
+                         ++i) {
+                        auto rc = fpd->SetFPDState(
+                            static_cast<Exchange::IDeviceSettingsFPD::FPDIndicator>(i),
+                            Exchange::IDeviceSettingsFPD::DS_FPD_STATE_ON);
+                        if (rc != Core::ERROR_NONE) ok = false;
+                    }
+                } else {
+                    auto dsInd = legacyToDSIndicator(fp_indicator);
+                    if (dsInd != Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
+                        ok = (fpd->SetFPDState(dsInd,
+                            Exchange::IDeviceSettingsFPD::DS_FPD_STATE_ON) == Core::ERROR_NONE);
                     }
                 }
+                fpd->Release();
+                return ok;
             }
-            catch (...)
-            {
-                LOGERR("FrontPanel Exception Caught during [%s]\r\n", __func__);
-                return false;
-            }
-            return true;
+            return false;
         }
 
         bool CFrontPanel::powerOffLed(frontPanelIndicator fp_indicator)
         {
             stopBlinkTimer();
-            try
-            {
-                switch (fp_indicator)
-                {
-                case FRONT_PANEL_INDICATOR_MESSAGE:
-                    isMessageLedOn = false;
-                    device::FrontPanelIndicator::getInstance("Message").setState(false);
-                    break;
-                case FRONT_PANEL_INDICATOR_RECORD:
-                    isRecordLedOn = false;
-                    device::FrontPanelIndicator::getInstance("Record").setState(false);
-                    break;
-                case FRONT_PANEL_INDICATOR_REMOTE:
-                    device::FrontPanelIndicator::getInstance("Remote").setState(false);
-                    break;
-                case FRONT_PANEL_INDICATOR_RFBYPASS:
-                    device::FrontPanelIndicator::getInstance("RfByPass").setState(false);
-                    break;
-                case FRONT_PANEL_INDICATOR_ALL:
-                    for (uint i = 0; i < fpIndicators.size(); i++)
-                    {
-                        //LOGWARN("powerOffLed for Indicator %s", QString::fromStdString(fpIndicators.at(i).getName()).toUtf8().constData());
-                        LOGWARN("powerOffLed for Indicator %s", fpIndicators.at(i).getName().c_str());
-                        device::FrontPanelIndicator::getInstance(fpIndicators.at(i).getName()).setState(false);
+            auto* fpd = acquireFPD();
+            if (fpd) {
+                bool ok = true;
+                if (fp_indicator == FRONT_PANEL_INDICATOR_ALL) {
+                    for (uint8_t i = 0;
+                         i < static_cast<uint8_t>(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX);
+                         ++i) {
+                        auto rc = fpd->SetFPDState(
+                            static_cast<Exchange::IDeviceSettingsFPD::FPDIndicator>(i),
+                            Exchange::IDeviceSettingsFPD::DS_FPD_STATE_OFF);
+                        if (rc != Core::ERROR_NONE) ok = false;
                     }
-                    break;
-                case FRONT_PANEL_INDICATOR_POWER:
-                    //LOGWARN("CFrontPanel::powerOffLed() - FRONT_PANEL_INDICATOR_POWER not handled");
-		    device::FrontPanelIndicator::getInstance("Power").setState(false);
-                    break;
-                default:
-                    LOGERR("Invalid Indicator %d", fp_indicator);
+                } else {
+                    auto dsInd = legacyToDSIndicator(fp_indicator);
+                    if (dsInd != Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
+                        ok = (fpd->SetFPDState(dsInd,
+                            Exchange::IDeviceSettingsFPD::DS_FPD_STATE_OFF) == Core::ERROR_NONE);
+                    }
                 }
+                fpd->Release();
+                return ok;
             }
-            catch (...)
-            {
-                LOGERR("FrontPanel Exception Caught during [%s]\r\n", __func__);
-                return false;
-            }
-            return true;
+            return false;
         }
 
 
@@ -445,60 +436,52 @@ namespace WPEFramework
         {
             stopBlinkTimer();
             bool success = false;
-            string ledIndicator = svc2iarm(parameters["ledIndicator"].String());
-            int brightness = -1;
+            string ledIndicator = svcToIndicatorName(parameters["ledIndicator"].String());
 
-            if (parameters.HasLabel("brightness"))
-                //brightness = properties["brightness"].Number();
-                getNumberParameter("brightness", brightness);
+            auto* fpd = acquireFPD();
+            if (!fpd)
+                return false;
 
-            unsigned int color = 0;
-            if (parameters.HasLabel("color") && !parameters["color"].String().empty()) //color mode 2
-            {
-                string colorString = parameters["color"].String();
-                try
-                {
-                    device::FrontPanelIndicator::getInstance(ledIndicator.c_str()).setColor(device::FrontPanelIndicator::Color::getInstance(colorString.c_str()), false);
-                    success = true;
+            Exchange::IDeviceSettingsFPD::FPDIndicator dsInd =
+                indicatorNameToDSIndicator(ledIndicator);
+            if (dsInd != Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
+                if (parameters.HasLabel("color") && !parameters["color"].String().empty()) {
+                    uint32_t colorValue = 0;
+                    if (!colorNameToValue(parameters["color"].String(), colorValue)) {
+                        LOGERR("setLED: unsupported color '%s'", parameters["color"].String().c_str());
+                        fpd->Release();
+                        return false;
+                    }
+
+                    success = (fpd->SetFPDColor(dsInd, colorValue) == Core::ERROR_NONE);
+                } else if (parameters.HasLabel("red")) {
+                    uint32_t red = 0, green = 0, blue = 0;
+                    getNumberParameter("red",   red);
+                    getNumberParameter("green", green);
+                    getNumberParameter("blue",  blue);
+                    const auto rc = fpd->SetFPDColor(dsInd,
+                        ((red & 0xFFU) << 16) | ((green & 0xFFU) << 8) | (blue & 0xFFU));
+                    success = (rc == Core::ERROR_NONE);
                 }
-                catch (...)
-                {
-                    success = false;
+                // Apply brightness
+                int brightness = -1;
+                if (parameters.HasLabel("brightness")) {
+                    uint32_t uBright = static_cast<uint32_t>(-1);
+                    getNumberParameter("brightness", uBright);
+                    if (uBright != static_cast<uint32_t>(-1))
+                        brightness = static_cast<int>(uBright);
+                }
+                if (brightness < 0) {
+                    uint32_t bright = 0;
+                    fpd->GetFPDBrightness(dsInd, bright, true);
+                    brightness = static_cast<int>(bright);
+                }
+                if (brightness >= 0) {
+                    success = (fpd->SetFPDBrightness(dsInd,
+                        static_cast<uint32_t>(brightness), false) == Core::ERROR_NONE);
                 }
             }
-            else if (parameters.HasLabel("red")) //color mode 1
-            {
-                unsigned int red = 0, green = 0, blue = 0;
-
-                getNumberParameter("red", red);
-                getNumberParameter("green", green);
-                getNumberParameter("blue", blue);
-
-                color = (red << 16) | (green << 8) | blue;
-                try
-                {
-                    device::FrontPanelIndicator::getInstance(ledIndicator.c_str()).setColor(color);
-                    success = true;
-                }
-                catch (...)
-                {
-                    success = false;
-                }
-            }
-
-            LOGWARN("setLed ledIndicator: %s brightness: %d", parameters["ledIndicator"].String().c_str(), brightness);
-            try
-            {
-                if (brightness == -1)
-                    brightness = device::FrontPanelIndicator::getInstance(ledIndicator.c_str()).getBrightness(true);
-
-                device::FrontPanelIndicator::getInstance(ledIndicator.c_str()).setBrightness(brightness, false);
-                success = true;
-            }
-            catch (...)
-            {
-                success = false;
-            }
+            fpd->Release();
             return success;
         }
 
@@ -506,29 +489,32 @@ namespace WPEFramework
         {
             stopBlinkTimer();
             m_blinkList.clear();
-            string ledIndicator = svc2iarm(blinkInfo["ledIndicator"].String());
+            string ledIndicator = svcToIndicatorName(blinkInfo["ledIndicator"].String());
             int iterations = 0;
             getNumberParameterObject(blinkInfo, "iterations", iterations);
+
             JsonArray patternList = blinkInfo["pattern"].Array();
             for (int i = 0; i < patternList.Length(); i++)
             {
                 JsonObject frontPanelBlinkHash = patternList[i].Object();
                 FrontPanelBlinkInfo frontPanelBlinkInfo;
                 frontPanelBlinkInfo.ledIndicator = ledIndicator;
+
                 int brightness = -1;
                 if (frontPanelBlinkHash.HasLabel("brightness"))
                     getNumberParameterObject(frontPanelBlinkHash, "brightness", brightness);
 
                 int duration = 0;
                 getNumberParameterObject(frontPanelBlinkHash, "duration", duration);
-                LOGWARN("setBlink ledIndicator: %s iterations: %d brightness: %d duration: %d", ledIndicator.c_str(), iterations, brightness, duration);
+                LOGWARN("setBlink ledIndicator: %s iterations: %d brightness: %d duration: %d",
+                    ledIndicator.c_str(), iterations, brightness, duration);
+
                 frontPanelBlinkInfo.brightness = brightness;
                 frontPanelBlinkInfo.durationInMs = duration;
                 frontPanelBlinkInfo.colorValue = 0;
                 if (frontPanelBlinkHash.HasLabel("color")) //color mode 2
                 {
-                    string color = frontPanelBlinkHash["color"].String();
-                    frontPanelBlinkInfo.colorName = std::move(color);
+                    frontPanelBlinkInfo.colorName = frontPanelBlinkHash["color"].String();
                     frontPanelBlinkInfo.colorMode = 2;
                 }
                 else if (frontPanelBlinkHash.HasLabel("red")) //color mode 1
@@ -549,7 +535,7 @@ namespace WPEFramework
                 m_blinkList.push_back(std::move(frontPanelBlinkInfo));
             }
             startBlinkTimer(iterations);
-        }
+        } // end CFrontPanel::setBlink
 
         void CFrontPanel::startBlinkTimer(int numberOfBlinkRepeats)
         {
@@ -576,33 +562,40 @@ namespace WPEFramework
 
         void CFrontPanel::setBlinkLed(FrontPanelBlinkInfo blinkInfo)
         {
-            std::string ledIndicator = blinkInfo.ledIndicator;
+            auto* fpd = acquireFPD();
+            if (!fpd) {
+                LOGERR("setBlinkLed: IDeviceSettingsFPD interface not available");
+                return;
+            }
+
+            Exchange::IDeviceSettingsFPD::FPDIndicator dsInd =
+                indicatorNameToDSIndicator(blinkInfo.ledIndicator);
+            if (dsInd == Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
+                LOGERR("setBlinkLed: unknown ledIndicator='%s'", blinkInfo.ledIndicator.c_str());
+                fpd->Release();
+                return;
+            }
+
+            if (blinkInfo.colorMode == 1) {
+                fpd->SetFPDColor(dsInd, blinkInfo.colorValue);
+            } else if (blinkInfo.colorMode == 2) {
+                uint32_t colorValue = 0;
+                if (colorNameToValue(blinkInfo.colorName, colorValue))
+                    fpd->SetFPDColor(dsInd, colorValue);
+                else
+                    LOGWARN("setBlinkLed: unsupported color '%s'", blinkInfo.colorName.c_str());
+            }
+
             int brightness = blinkInfo.brightness;
-            try
-            {
-                if (blinkInfo.colorMode == 1)
-                {
-                    device::FrontPanelIndicator::getInstance(ledIndicator.c_str()).setColor(blinkInfo.colorValue, false);
-                }
-                else if (blinkInfo.colorMode == 2)
-                {
-                    device::FrontPanelIndicator::getInstance(ledIndicator.c_str()).setColor(device::FrontPanelIndicator::Color::getInstance(blinkInfo.colorName.c_str()), false);
-                }
+            if (brightness == -1) {
+                uint32_t bright = 0;
+                if (fpd->GetFPDBrightness(dsInd, bright, true) == Core::ERROR_NONE)
+                    brightness = static_cast<int>(bright);
+            }
+            if (brightness >= 0)
+                fpd->SetFPDBrightness(dsInd, static_cast<uint32_t>(brightness), false);
 
-            }
-            catch (...)
-            {}
-            try
-            {
-                if (brightness == -1)
-                    brightness = device::FrontPanelIndicator::getInstance(ledIndicator.c_str()).getBrightness(true);
-
-                device::FrontPanelIndicator::getInstance(ledIndicator.c_str()).setBrightness(brightness, false);
-            }
-            catch (...)
-            {
-                LOGWARN("Exception caught in setBlinkLed for setBrightness ");
-            }
+            fpd->Release();
         }
 
         void CFrontPanel::onBlinkTimer()
@@ -636,6 +629,77 @@ namespace WPEFramework
             uint64_t result = 0;
             m_frontPanel->onBlinkTimer();
             return(result);
+        }
+
+        // ─── Per-indicator brightness helpers ─────────────────────────────────────
+
+        bool CFrontPanel::setBrightnessByName(const std::string& indicatorName, int brightness)
+        {
+            LOGINFO("setBrightnessByName: indicatorName='%s' brightness=%d", indicatorName.c_str(), brightness);
+            stopBlinkTimer();
+            auto* fpd = acquireFPD();
+            if (!fpd) {
+                LOGERR("setBrightnessByName: IDeviceSettingsFPD interface not available");
+                return false;
+            }
+            Exchange::IDeviceSettingsFPD::FPDIndicator dsInd =
+                indicatorNameToDSIndicator(indicatorName);
+            LOGINFO("setBrightnessByName: dsInd=%d (MAX=%d)",
+                static_cast<int>(dsInd),
+                static_cast<int>(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX));
+            bool ok = false;
+            if (dsInd != Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
+                auto rc = fpd->SetFPDBrightness(dsInd,
+                    static_cast<uint32_t>(brightness), true);
+                ok = (rc == Core::ERROR_NONE);
+                LOGINFO("setBrightnessByName: SetFPDBrightness rc=%u ok=%s", rc, ok ? "true" : "false");
+            } else {
+                LOGERR("setBrightnessByName: unknown indicatorName='%s', no indicator found", indicatorName.c_str());
+            }
+            fpd->Release();
+            return ok;
+        }
+
+        int CFrontPanel::getBrightnessByName(const std::string& indicatorName)
+        {
+            auto* fpd = acquireFPD();
+            if (fpd) {
+                Exchange::IDeviceSettingsFPD::FPDIndicator dsInd =
+                    indicatorNameToDSIndicator(indicatorName);
+                int result = globalLedBrightness;
+                if (dsInd != Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
+                    uint32_t bright = 0;
+                    if (fpd->GetFPDBrightness(dsInd, bright, false) == Core::ERROR_NONE)
+                        result = static_cast<int>(bright);
+                }
+                fpd->Release();
+                return result;
+            }
+            return globalLedBrightness;
+        }
+
+        void CFrontPanel::setFPDAcquirer(
+            std::function<Exchange::IDeviceSettingsFPD*()> acquirer)
+        {
+            std::lock_guard<std::mutex> lock(m_fpdAcquirerLock);
+            m_fpdAcquirer = std::move(acquirer);
+        }
+
+        void CFrontPanel::clearFPDInterface()
+        {
+            std::lock_guard<std::mutex> lock(m_fpdAcquirerLock);
+            m_fpdAcquirer = nullptr;
+        }
+
+        Exchange::IDeviceSettingsFPD* CFrontPanel::acquireFPD()
+        {
+            std::function<Exchange::IDeviceSettingsFPD*()> acquirer;
+            {
+                std::lock_guard<std::mutex> lock(m_fpdAcquirerLock);
+                acquirer = m_fpdAcquirer;
+            }
+            // Invoked outside the lock so a slow COM-RPC call cannot block clearFPDInterface().
+            return acquirer ? acquirer() : nullptr;
         }
 
     }
