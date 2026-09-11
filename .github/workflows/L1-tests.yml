@@ -83,7 +83,7 @@ jobs:
         run: >
           sudo apt update
           &&
-          sudo apt install -y libsqlite3-dev libcurl4-openssl-dev valgrind lcov clang libsystemd-dev libboost-all-dev libwebsocketpp-dev meson libcunit1 libcunit1-dev curl protobuf-compiler-grpc libgrpc-dev libgrpc++-dev
+          sudo apt install -y libsqlite3-dev libcurl4-openssl-dev valgrind gdb lcov clang libsystemd-dev libboost-all-dev libwebsocketpp-dev meson libcunit1 libcunit1-dev curl protobuf-compiler-grpc libgrpc-dev libgrpc++-dev
 
       - name: Install GStreamer
         run: |
@@ -626,13 +626,30 @@ jobs:
           ls -l /dev/disk/by-id/usb-JetFlash_Transcend_16GB_UEUIRCXT-0
 
       - name: Run unit tests without valgrind
-        run: >
-          PATH=$GITHUB_WORKSPACE/install/usr/bin:${PATH}
-          LD_LIBRARY_PATH=$GITHUB_WORKSPACE/install/usr/lib:$GITHUB_WORKSPACE/install/usr/lib/wpeframework/plugins:${LD_LIBRARY_PATH}
-          GTEST_OUTPUT="json:$(pwd)/rdkL1TestResults.json"
-          RdkServicesL1Test &&
-          cp -rf $(pwd)/rdkL1TestResults.json $GITHUB_WORKSPACE/rdkL1TestResultsWithoutValgrind.json &&
-          rm -rf $(pwd)/rdkL1TestResults.json
+        run: |
+          export PATH=$GITHUB_WORKSPACE/install/usr/bin:${PATH}
+          export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/install/usr/lib:$GITHUB_WORKSPACE/install/usr/lib/wpeframework/plugins:${LD_LIBRARY_PATH}
+          export GTEST_OUTPUT="json:$(pwd)/rdkL1TestResults.json"
+          ulimit -c unlimited
+          # gdb holds the faulting process so the crash frame can still be unwound.
+          gdb -q --batch \
+            -ex "set pagination off" \
+            -ex "set confirm off" \
+            -ex "run" \
+            -ex "echo \n===== crashing thread =====\n" \
+            -ex "bt full" \
+            -ex "echo \n===== all threads =====\n" \
+            -ex "thread apply all bt full" \
+            --args RdkServicesL1Test 2>&1 | tee $GITHUB_WORKSPACE/gdb_l1.log
+          if [ -f "$(pwd)/rdkL1TestResults.json" ]; then
+            cp -rf $(pwd)/rdkL1TestResults.json $GITHUB_WORKSPACE/rdkL1TestResultsWithoutValgrind.json
+            rm -rf $(pwd)/rdkL1TestResults.json
+          fi
+          # gdb --batch exits 0 even when the inferior faults, so key off the signal report.
+          if grep -qE "Program received signal|SIGSEGV|SIGABRT|SIGBUS" $GITHUB_WORKSPACE/gdb_l1.log; then
+            echo "::error::L1 test crashed under gdb - see backtrace above"
+            exit 1
+          fi
 
       - name: Run unit tests with valgrind
         if: ${{ !env.ACT }}
@@ -684,6 +701,7 @@ jobs:
           path: |
             coverage/
             valgrind_log
+            gdb_l1.log
             rdkL1TestResultsWithoutValgrind.json
             rdkL1TestResultsWithValgrind.json
           if-no-files-found: warn
