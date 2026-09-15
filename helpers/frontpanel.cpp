@@ -183,6 +183,23 @@ namespace WPEFramework
             }
         }
 
+        /*static*/ std::string CFrontPanel::dsColorValueToName(uint32_t value)
+        {
+            switch (value & 0xFFFFFFU) {
+            case 0xFFFFFF: return "White";
+            case 0xFF0000: return "Red";
+            case 0x00FF00: return "Green";
+            case 0x0000FF: return "Blue";
+            case 0xFFFFE0: return "Yellow";
+            case 0xFF8C00: return "Orange";
+            default: {
+                char hexBuf[16];
+                snprintf(hexBuf, sizeof(hexBuf), "#%06X", value & 0xFFFFFFU);
+                return std::string(hexBuf);
+            }
+            }
+        }
+
         CFrontPanel::CFrontPanel()
             : m_blinkTimer(this)
             , m_isBlinking(false)
@@ -272,15 +289,15 @@ namespace WPEFramework
 
         void CFrontPanel::deinitialize()
         {
-
-            s_instance->stop();
-            
-            if (_powerManagerPlugin) {
-                _powerManagerPlugin.Reset();
-            }
             if (s_instance) {
+                s_instance->stop();
+                s_instance->clearFPDInterface();
                 delete s_instance;
                 s_instance = nullptr;
+            }
+
+            if (_powerManagerPlugin) {
+                _powerManagerPlugin.Reset();
             }
             initDone = 0;
         }

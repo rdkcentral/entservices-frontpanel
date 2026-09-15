@@ -124,7 +124,9 @@ namespace WPEFramework
                     fpd->Release();
                 }
             }
-            CFrontPanel::instance()->clearFPDInterface();
+            // Also drops CFrontPanel's file-static PowerManager reference. Leaving that
+            // to library unload releases it after gmock/Thunder globals are already gone.
+            CFrontPanel::deinitialize();
             DSHelper::Close();
             _registeredEventHandlers = false;
             FrontPanelImplementation::_instance = nullptr;
@@ -279,10 +281,7 @@ namespace WPEFramework
                             colorBindings[b].targetId == ind.id) {
                             for (size_t c = 0; c < colors.size(); ++c) {
                                 if (colors[c].id == colorBindings[b].colorId) {
-                                    char hexBuf[16];
-                                    snprintf(hexBuf, sizeof(hexBuf), "#%06X",
-                                             colors[c].color & 0xFFFFFFU);
-                                    availableColors.Add(std::string(hexBuf));
+                                    availableColors.Add(CFrontPanel::dsColorValueToName(colors[c].color));
                                     break;
                                 }
                             }

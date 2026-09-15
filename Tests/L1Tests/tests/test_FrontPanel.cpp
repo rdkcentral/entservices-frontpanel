@@ -196,13 +196,14 @@ protected:
         // are still alive; its destructor closes DSHelper and unregisters PowerManager.
         FrontPanelImplem = Core::ProxyType<Plugin::FrontPanelImplementation>();
 
+        // Must precede the mock deletes: drops CFrontPanel's static PowerManager ref
+        // (and resets initDone) while the gmock registry is still alive.
+        Plugin::CFrontPanel::deinitialize();
+
         _notification = nullptr;
         PowerManagerMock::Delete();
         FrontPanelFPDMock::Delete();
         p_fpdMock = nullptr;
-
-        // Clearing out out-of-scope state, and resetting initDone to 0.
-        Plugin::CFrontPanel::initDone = 0;
     }
 };
 

@@ -135,6 +135,11 @@ namespace WPEFramework
              *  Public so FrontPanelImplementation can use it for config lookups. */
             static std::string dsIndicatorToSvcName(Exchange::IDeviceSettingsFPD::FPDIndicator ind);
 
+            /** Map a packed 0xRRGGBB color value to its known name (e.g. "Red"),
+             *  falling back to a "#RRGGBB" literal for unrecognised values.
+             *  Public so FrontPanelImplementation can use it for config lookups. */
+            static std::string dsColorValueToName(uint32_t value);
+
         private:
             CFrontPanel();
             static CFrontPanel* s_instance;
