@@ -154,7 +154,7 @@ namespace WPEFramework
             else if (color == "yellow") { value = 0xFFFFE0; return true; }
             else if (color == "orange") { value = 0xFF8C00; return true; }
 
-            std::string hex = color;
+            std::string hex = std::move(color);
             if (hex.compare(0, 1, "#") == 0)
                 hex.erase(0, 1);
             else if (hex.compare(0, 2, "0x") == 0)

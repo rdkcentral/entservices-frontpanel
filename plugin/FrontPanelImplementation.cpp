@@ -246,7 +246,7 @@ namespace WPEFramework
                 std::string name = CFrontPanel::dsIndicatorToSvcName(
                     static_cast<Exchange::IDeviceSettingsFPD::FPDIndicator>(indicators[i].id));
                 if (!name.empty())
-                    lights.push_back(name);
+                    lights.push_back(std::move(name));
             }
             return lights;
         }
