@@ -21,7 +21,6 @@
 
 #include <mutex>
 #include "Module.h"
-#include "libIARM.h"
 
 #include <interfaces/IFrontPanel.h>
 #include <interfaces/json/JFrontPanel.h>
