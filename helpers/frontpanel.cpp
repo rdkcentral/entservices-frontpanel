@@ -383,27 +383,29 @@ namespace WPEFramework
         bool CFrontPanel::powerOnLed(frontPanelIndicator fp_indicator)
         {
             stopBlinkTimer();
-            auto* fpd = acquireFPD();
-            if (fpd) {
-                bool ok = true;
-                if (fp_indicator == FRONT_PANEL_INDICATOR_ALL) {
-                    for (uint8_t i = 0;
-                         i < static_cast<uint8_t>(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX);
-                         ++i) {
-                        auto rc = fpd->SetFPDState(
-                            static_cast<Exchange::IDeviceSettingsFPD::FPDIndicator>(i),
-                            Exchange::IDeviceSettingsFPD::DS_FPD_STATE_ON);
-                        if (rc != Core::ERROR_NONE) ok = false;
+            if (powerStatus) {
+                auto* fpd = acquireFPD();
+                if (fpd) {
+                    bool ok = true;
+                    if (fp_indicator == FRONT_PANEL_INDICATOR_ALL) {
+                        for (uint8_t i = 0;
+                            i < static_cast<uint8_t>(Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX);
+                            ++i) {
+                            auto rc = fpd->SetFPDState(
+                                static_cast<Exchange::IDeviceSettingsFPD::FPDIndicator>(i),
+                                Exchange::IDeviceSettingsFPD::DS_FPD_STATE_ON);
+                            if (rc != Core::ERROR_NONE) ok = false;
+                        }
+                    } else {
+                        auto dsInd = legacyToDSIndicator(fp_indicator);
+                        if (dsInd != Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
+                            ok = (fpd->SetFPDState(dsInd,
+                                Exchange::IDeviceSettingsFPD::DS_FPD_STATE_ON) == Core::ERROR_NONE);
+                        }
                     }
-                } else {
-                    auto dsInd = legacyToDSIndicator(fp_indicator);
-                    if (dsInd != Exchange::IDeviceSettingsFPD::DS_FPD_INDICATOR_MAX) {
-                        ok = (fpd->SetFPDState(dsInd,
-                            Exchange::IDeviceSettingsFPD::DS_FPD_STATE_ON) == Core::ERROR_NONE);
-                    }
+                    fpd->Release();
+                    return ok;
                 }
-                fpd->Release();
-                return ok;
             }
             return false;
         }

@@ -158,6 +158,12 @@ namespace WPEFramework
             // The DeviceSettings plugin manages front panel power state internally;
             // no explicit CFrontPanel gate is needed here.
             LOGINFO("onPowerModeChanged: newState=%d (DS COM-RPC path)", static_cast<int>(newState));
+            if (newState == PowerState::POWER_STATE_ON) {
+                CFrontPanel::instance()->setPowerStatus(true);
+            } else {
+                CFrontPanel::instance()->setPowerStatus(false);
+            }
+
         }
 
         void FrontPanelImplementation::registerEventHandlers()
