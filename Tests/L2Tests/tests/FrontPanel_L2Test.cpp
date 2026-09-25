@@ -43,9 +43,9 @@
 #define L2TEST_CALLSIGN _T("L2tests.1")
 
 using ::testing::NiceMock;
-using namespace WPEFramework;
+using namespace Thunder;
 using testing::StrictMock;
-using PowerState = WPEFramework::Exchange::IPowerManager::PowerState;
+using PowerState = Thunder::Exchange::IPowerManager::PowerState;
 
 typedef enum : uint32_t {
     FRONTPANELL2TEST_BRIGHTNESS_CHANGED = 0x00000001,

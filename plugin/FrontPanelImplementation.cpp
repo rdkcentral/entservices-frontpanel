@@ -55,7 +55,7 @@
 #define API_VERSION_NUMBER_MINOR 0
 #define API_VERSION_NUMBER_PATCH 6
 
-using PowerState = WPEFramework::Exchange::IPowerManager::PowerState;
+using PowerState = Thunder::Exchange::IPowerManager::PowerState;
 
 
 namespace
@@ -134,7 +134,7 @@ namespace
     }
 }
 
-namespace WPEFramework
+namespace Thunder
 {
 
     namespace Plugin
@@ -188,7 +188,7 @@ namespace WPEFramework
 
         void FrontPanelImplementation::onPowerModeChanged(const PowerState currentState, const PowerState newState)
         {
-            if(newState == WPEFramework::Exchange::IPowerManager::POWER_STATE_ON)
+            if(newState == Thunder::Exchange::IPowerManager::POWER_STATE_ON)
             {
                 LOGINFO("setPowerStatus true");
                 CFrontPanel::instance()->setPowerStatus(true);
@@ -465,4 +465,4 @@ namespace WPEFramework
             return Core::ERROR_NONE;
         }
     } // namespace Plugin
-} // namespace WPEFramework
+} // namespace Thunder

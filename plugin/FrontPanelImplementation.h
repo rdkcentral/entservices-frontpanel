@@ -27,15 +27,15 @@
 #include "PowerManagerInterface.h"
 #include <interfaces/IFrontPanel.h>
 
-using namespace WPEFramework;
-using PowerState = WPEFramework::Exchange::IPowerManager::PowerState;
-using ThermalTemperature = WPEFramework::Exchange::IPowerManager::ThermalTemperature;
+using namespace Thunder;
+using PowerState = Thunder::Exchange::IPowerManager::PowerState;
+using ThermalTemperature = Thunder::Exchange::IPowerManager::ThermalTemperature;
 
 #define DATA_LED  "data_led"
 #define RECORD_LED "record_led"
 
 
-namespace WPEFramework {
+namespace Thunder {
 
     namespace Plugin {
 
@@ -132,4 +132,4 @@ namespace WPEFramework {
         };
 
 	} // namespace Plugin
-} // namespace WPEFramework
+} // namespace Thunder

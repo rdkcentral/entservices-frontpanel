@@ -43,8 +43,8 @@
 #include "libIBus.h"
 #include <interfaces/IPowerManager.h>
 
-using namespace WPEFramework;
-using PowerState = WPEFramework::Exchange::IPowerManager::PowerState;
+using namespace Thunder;
+using PowerState = Thunder::Exchange::IPowerManager::PowerState;
 #endif
 
 #include "UtilsJsonRpc.h"
@@ -62,7 +62,7 @@ Requirement now
 
 */
 
-namespace WPEFramework
+namespace Thunder
 {
 
     namespace Plugin
@@ -161,14 +161,14 @@ namespace WPEFramework
 #if defined(HAS_API_POWERSTATE)
                     {
                         Core::hresult res = Core::ERROR_GENERAL;
-                        PowerState pwrStateCur = WPEFramework::Exchange::IPowerManager::POWER_STATE_UNKNOWN;
-                        PowerState pwrStatePrev = WPEFramework::Exchange::IPowerManager::POWER_STATE_UNKNOWN;
+                        PowerState pwrStateCur = Thunder::Exchange::IPowerManager::POWER_STATE_UNKNOWN;
+                        PowerState pwrStatePrev = Thunder::Exchange::IPowerManager::POWER_STATE_UNKNOWN;
                         ASSERT (_powerManagerPlugin);
                         if (_powerManagerPlugin) {
                             res = _powerManagerPlugin->GetPowerState(pwrStateCur, pwrStatePrev);
                             if (Core::ERROR_NONE == res)
                             {
-                                if (pwrStateCur == WPEFramework::Exchange::IPowerManager::POWER_STATE_ON)
+                                if (pwrStateCur == Thunder::Exchange::IPowerManager::POWER_STATE_ON)
                                     powerStatus = true;
                             }
                             LOGINFO("pwrStateCur[%d] pwrStatePrev[%d] powerStatus[%d]", pwrStateCur, pwrStatePrev, powerStatus);

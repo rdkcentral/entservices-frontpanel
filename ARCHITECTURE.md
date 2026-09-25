@@ -2,7 +2,7 @@
 
 ## Overview
 
-The RDK EntServices FrontPanel is a WPEFramework (Thunder) plugin that provides a comprehensive interface for controlling front panel hardware components on RDK-based devices. It acts as an abstraction layer between high-level applications and low-level device-specific front panel hardware, enabling standardized control of LEDs, displays, and other front panel indicators.
+The RDK EntServices FrontPanel is a Thunder plugin that provides a comprehensive interface for controlling front panel hardware components on RDK-based devices. It acts as an abstraction layer between high-level applications and low-level device-specific front panel hardware, enabling standardized control of LEDs, displays, and other front panel indicators.
 
 ## System Architecture
 
@@ -14,7 +14,7 @@ The RDK EntServices FrontPanel is a WPEFramework (Thunder) plugin that provides 
 ├─────────────────────────────────────────────────────────────┤
 │                  JSON-RPC Interface                         │
 ├─────────────────────────────────────────────────────────────┤
-│              WPEFramework/Thunder Core                       │
+│                  Thunder Core                               │
 ├─────────────────────────────────────────────────────────────┤
 │                FrontPanel Plugin                            │
 │  ┌─────────────────────┬─────────────────────────────────┐  │
@@ -76,13 +76,13 @@ The RDK EntServices FrontPanel is a WPEFramework (Thunder) plugin that provides 
 - Asynchronous event handling for notifications
 
 #### Timer Management
-- Blink functionality uses WPEFramework timer subsystem
+- Blink functionality uses Thunder timer subsystem
 - Precise timing control for LED blink patterns
 - Resource cleanup on timer expiration
 
 ### Integration Points
 
-#### 1. WPEFramework/Thunder Integration
+#### 1. Thunder Integration
 - Plugin lifecycle management (Initialize, Deinitialize)
 - Service discovery and inter-plugin communication
 - Configuration management through Thunder config system

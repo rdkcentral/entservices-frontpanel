@@ -27,10 +27,10 @@
 #include <interfaces/json/JFrontPanel.h>
 #include <interfaces/json/JsonData_FrontPanel.h>
 
-using namespace WPEFramework;
+using namespace Thunder;
 
 
-namespace WPEFramework {
+namespace Thunder {
 
     namespace Plugin {
         class FrontPanel : public PluginHost::IPlugin, public PluginHost::JSONRPC {
@@ -78,4 +78,4 @@ namespace WPEFramework {
         
 
 	} // namespace Plugin
-} // namespace WPEFramework
+} // namespace Thunder

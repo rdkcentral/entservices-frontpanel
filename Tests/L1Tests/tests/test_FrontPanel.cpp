@@ -40,7 +40,7 @@
 #include "ManagerMock.h"
 #include "ThunderPortability.h"
 
-using namespace WPEFramework;
+using namespace Thunder;
 using IPowerManager = Exchange::IPowerManager;
 
 using testing::Eq;

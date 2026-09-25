@@ -28,17 +28,14 @@ const uint8_t bytes[] = { 0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0xFE, 0x03, 0x20, 
 }
 #include "ThunderPortability.h"
 
-using namespace WPEFramework;
+using namespace Thunder;
 
 TEST(UtilsFileTest, createFolder_createFile_moveFile_verifyFile)
 {
     Core::Directory dir(_T("/tmp/UtilsFileTest"));
 
-#ifdef USE_THUNDER_R4
-    EXPECT_TRUE(dir.Destroy());
-#else
     EXPECT_TRUE(dir.Destroy(false));
-#endif /*USE_THUNDER_R4 */
+
     ASSERT_TRUE(dir.CreatePath());
 
     Core::File file(string(_T("/tmp/UtilsFileTest/file")));
