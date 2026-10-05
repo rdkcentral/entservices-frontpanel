@@ -24,7 +24,7 @@
 #include "frontpanel.h"
 #include "frontpanel.cpp"
 #include "FrontPanelMock.h"
-#include "FrontPanelFPDMock.h"
+#include "DeviceSettingsFPDMock.h"
 #include "WorkerPoolImplementation.h"
 #include "WrapsMock.h"
 #include "COMLinkMock.h"
@@ -147,7 +147,7 @@ protected:
  */
 class FrontPanelInitializedTest : public FrontPanelTest {
 protected:
-    FrontPanelFPDMock* p_fpdMock = nullptr;
+    DeviceSettingsFPDMock* p_fpdMock = nullptr;
     IPowerManager::IModeChangedNotification* _notification = nullptr;
 
     FrontPanelInitializedTest()
@@ -177,7 +177,7 @@ protected:
 
         EXPECT_EQ(string(""), plugin->Initialize(&service));
 
-        p_fpdMock = static_cast<FrontPanelFPDMock*>(FrontPanelFPDMock::Get());
+        p_fpdMock = static_cast<DeviceSettingsFPDMock*>(DeviceSettingsFPDMock::Get());
         Plugin::CFrontPanel::instance()->setFPDAcquirer([&]() {
             p_fpdMock->AddRef();
             return static_cast<FPD*>(p_fpdMock);
@@ -202,7 +202,7 @@ protected:
 
         _notification = nullptr;
         PowerManagerMock::Delete();
-        FrontPanelFPDMock::Delete();
+        DeviceSettingsFPDMock::Delete();
         p_fpdMock = nullptr;
     }
 };
