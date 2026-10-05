@@ -25,6 +25,7 @@
 #include "frontpanel.cpp"
 #include "FrontPanelMock.h"
 #include "DeviceSettingsFPDMock.h"
+#include "DeviceSettingsMock.h"
 #include "WorkerPoolImplementation.h"
 #include "WrapsMock.h"
 #include "COMLinkMock.h"
@@ -175,6 +176,34 @@ protected:
         // gmock's exit-time report and has no effect if the object is destroyed normally.
         ::testing::Mock::AllowLeak(&PowerManagerMock::Mock());
 
+        ON_CALL(service, QueryInterfaceByCallsign(::testing::_, ::testing::StrEq("org.rdk.DeviceSettings")))
+            .WillByDefault(::testing::Invoke(
+                [&](const uint32_t interfaceId, const string& name) -> void* {
+                    auto* iface = DeviceSettingsMock::Get();
+                    if (iface) iface->AddRef();
+                    return iface;
+                }));
+
+        // Representative FPD config so GetFrontPanelLights exercises the real
+        // DSHelper-backed discovery path instead of returning an empty payload.
+        ON_CALL(DeviceSettingsMock::Mock(), GetDeviceSettingConfigs(::testing::_))
+            .WillByDefault(::testing::Invoke(
+                [](Exchange::IDeviceSettings::DeviceSettingConfigs& configs) -> Core::hresult {
+                    configs.indicators = {
+                        { static_cast<int32_t>(FPD::DS_FPD_INDICATOR_POWER),  100, 0, 0, 10, 1 },
+                        { static_cast<int32_t>(FPD::DS_FPD_INDICATOR_RECORD), 100, 0, 0, 1,  0 }
+                    };
+                    configs.colors = {
+                        { 1, 0xFF0000 }, // Red
+                        { 2, 0xFFFFFF }  // White
+                    };
+                    configs.colorBindings = {
+                        { 0, static_cast<int32_t>(FPD::DS_FPD_INDICATOR_POWER), 1 },
+                        { 0, static_cast<int32_t>(FPD::DS_FPD_INDICATOR_POWER), 2 }
+                    };
+                    return Core::ERROR_NONE;
+                }));
+
         EXPECT_EQ(string(""), plugin->Initialize(&service));
 
         p_fpdMock = static_cast<DeviceSettingsFPDMock*>(DeviceSettingsFPDMock::Get());
@@ -201,7 +230,13 @@ protected:
         Plugin::CFrontPanel::deinitialize();
 
         _notification = nullptr;
+
+        // Stop worker threads before deleting mocks they may still reference.
+        workerPool->Stop();
+        Core::IWorkerPool::Assign(nullptr);
+
         PowerManagerMock::Delete();
+        DeviceSettingsMock::Delete();
         DeviceSettingsFPDMock::Delete();
         p_fpdMock = nullptr;
     }
@@ -348,11 +383,41 @@ TEST_F(FrontPanelInitializedEventDsTest, getBrightness)
 
 TEST_F(FrontPanelInitializedEventDsTest, getFrontPanelLights)
 {
-    // Without a live DeviceSettings COM-RPC config, DSHelper::getFPDIndicators()/
-    // getFPDColors()/getFPDColorBindings() are empty; GetFrontPanelLights still
-    // reports success=true with an empty light list/info payload.
     EXPECT_EQ(Core::ERROR_NONE, handler.Invoke(connection, _T("getFrontPanelLights"), _T(""), response));
-    EXPECT_TRUE(response.find("\"success\":true") != std::string::npos);
+
+    JsonObject result;
+    ASSERT_TRUE(result.FromString(response));
+    EXPECT_TRUE(result["success"].Boolean());
+
+    JsonArray lights = result["supportedLights"].Array();
+    auto lightIt = lights.Elements();
+    ASSERT_TRUE(lightIt.Next());
+    EXPECT_EQ(string("power_led"), lightIt.Current().String());
+    ASSERT_TRUE(lightIt.Next());
+    EXPECT_EQ(string("record_led"), lightIt.Current().String());
+    EXPECT_FALSE(lightIt.Next());
+
+    JsonObject info;
+    ASSERT_TRUE(info.FromString(result["supportedLightsInfo"].String()));
+
+    JsonObject powerInfo = info["power_led"].Object();
+    EXPECT_EQ(string("int"), powerInfo["range"].String());
+    EXPECT_EQ(0, powerInfo["min"].Number());
+    EXPECT_EQ(100, powerInfo["max"].Number());
+    EXPECT_EQ(10, powerInfo["step"].Number());
+    EXPECT_EQ(1, powerInfo["colorMode"].Number());
+
+    JsonArray powerColors = powerInfo["colors"].Array();
+    auto colorIt = powerColors.Elements();
+    ASSERT_TRUE(colorIt.Next());
+    EXPECT_EQ(string("Red"), colorIt.Current().String());
+    ASSERT_TRUE(colorIt.Next());
+    EXPECT_EQ(string("White"), colorIt.Current().String());
+
+    JsonObject recordInfo = info["record_led"].Object();
+    EXPECT_EQ(string("int"), recordInfo["range"].String());
+    EXPECT_EQ(0, recordInfo["colorMode"].Number());
+    EXPECT_FALSE(recordInfo.HasLabel("colors"));
 }
 
 TEST_F(FrontPanelInitializedEventDsTest, powerLedOffPower)

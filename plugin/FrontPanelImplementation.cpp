@@ -244,8 +244,6 @@ namespace WPEFramework
 
         std::vector<std::string> FrontPanelImplementation::getFrontPanelLights()
         {
-            // Read FPD indicator config directly from DSHelper — same pattern as DisplaySettings
-            // calling DSHelper::getAudioPortEntries() etc. inline.
             std::vector<std::string> lights;
             const auto indicators = DSHelper::getFPDIndicators();
             for (size_t i = 0; i < indicators.size(); ++i) {
@@ -259,7 +257,6 @@ namespace WPEFramework
 
         JsonObject FrontPanelImplementation::getFrontPanelLightsInfo()
         {
-            // Read FPD config directly from DSHelper — same pattern as DisplaySettings.
             JsonObject returnResult;
             const auto indicators    = DSHelper::getFPDIndicators();
             const auto colorBindings = DSHelper::getFPDColorBindings();
@@ -396,10 +393,14 @@ namespace WPEFramework
                 if (file.is_open()) {
                     string propStr((std::istreambuf_iterator<char>(file)),
                                    std::istreambuf_iterator<char>());
-                    JsonObject props;
-                    props.FromString(propStr);
-                    LOGINFO("OnDeviceSettingsActivated: restoring LED from /tmp/ledproperties.txt");
-                    CFrontPanel::instance()->setLED(props);
+                    try {
+                        JsonObject props;
+                        props.FromString(propStr);
+                        LOGINFO("OnDeviceSettingsActivated: restoring LED from /tmp/ledproperties.txt");
+                        CFrontPanel::instance()->setLED(props);
+                    } catch (...) {
+                        LOGERR("OnDeviceSettingsActivated: failed to restore LED properties (invalid JSON?)");
+                    }
                 }
             }
         }
