@@ -184,27 +184,27 @@ protected:
                     return iface;
                 }));
 
-        // Representative FPD config so GetFrontPanelLights exercises the real
-        // DSHelper-backed discovery path instead of returning an empty payload.
-        ON_CALL(DeviceSettingsMock::Mock(), GetDeviceSettingConfigs(::testing::_))
-            .WillByDefault(::testing::Invoke(
-                [](Exchange::IDeviceSettings::DeviceSettingConfigs& configs) -> Core::hresult {
-                    configs.indicators = {
-                        { static_cast<int32_t>(FPD::DS_FPD_INDICATOR_POWER),  100, 0, 0, 10, 1 },
-                        { static_cast<int32_t>(FPD::DS_FPD_INDICATOR_RECORD), 100, 0, 0, 1,  0 }
-                    };
-                    configs.colors = {
-                        { 1, 0xFF0000 }, // Red
-                        { 2, 0xFFFFFF }  // White
-                    };
-                    configs.colorBindings = {
-                        { 0, static_cast<int32_t>(FPD::DS_FPD_INDICATOR_POWER), 1 },
-                        { 0, static_cast<int32_t>(FPD::DS_FPD_INDICATOR_POWER), 2 }
-                    };
-                    return Core::ERROR_NONE;
-                }));
-
         EXPECT_EQ(string(""), plugin->Initialize(&service));
+
+        // PluginSmartInterfaceType's activation monitoring can't be driven through
+        // this mocked IShell, so DSHelper::LoadAllConfigs() never runs (its root
+        // interface lookup always returns nullptr here). Inject a representative
+        // FPD config directly so GetFrontPanelLights exercises real discovery logic
+        // instead of an empty payload.
+        Exchange::IDeviceSettings::DeviceSettingConfigs configs;
+        configs.indicators = {
+            { static_cast<int32_t>(FPD::DS_FPD_INDICATOR_POWER),  100, 0, 0, 10, 1 },
+            { static_cast<int32_t>(FPD::DS_FPD_INDICATOR_RECORD), 100, 0, 0, 1,  0 }
+        };
+        configs.colors = {
+            { 1, 0xFF0000 }, // Red
+            { 2, 0xFFFFFF }  // White
+        };
+        configs.colorBindings = {
+            { 0, static_cast<int32_t>(FPD::DS_FPD_INDICATOR_POWER), 1 },
+            { 0, static_cast<int32_t>(FPD::DS_FPD_INDICATOR_POWER), 2 }
+        };
+        FrontPanelImplem->LoadConfigsForTesting(configs);
 
         p_fpdMock = static_cast<DeviceSettingsFPDMock*>(DeviceSettingsFPDMock::Get());
         Plugin::CFrontPanel::instance()->setFPDAcquirer([&]() {
