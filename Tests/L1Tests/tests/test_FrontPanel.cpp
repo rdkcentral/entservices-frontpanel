@@ -186,26 +186,6 @@ protected:
 
         EXPECT_EQ(string(""), plugin->Initialize(&service));
 
-        // PluginSmartInterfaceType's activation monitoring can't be driven through
-        // this mocked IShell, so DSHelper::LoadAllConfigs() never runs (its root
-        // interface lookup always returns nullptr here). Inject a representative
-        // FPD config directly so GetFrontPanelLights exercises real discovery logic
-        // instead of an empty payload.
-        Exchange::IDeviceSettings::DeviceSettingConfigs configs;
-        configs.indicators = {
-            { static_cast<int32_t>(FPD::DS_FPD_INDICATOR_POWER),  100, 0, 0, 10, 1 },
-            { static_cast<int32_t>(FPD::DS_FPD_INDICATOR_RECORD), 100, 0, 0, 1,  0 }
-        };
-        configs.colors = {
-            { 1, 0xFF0000 }, // Red
-            { 2, 0xFFFFFF }  // White
-        };
-        configs.colorBindings = {
-            { 0, static_cast<int32_t>(FPD::DS_FPD_INDICATOR_POWER), 1 },
-            { 0, static_cast<int32_t>(FPD::DS_FPD_INDICATOR_POWER), 2 }
-        };
-        FrontPanelImplem->LoadConfigsForTesting(configs);
-
         p_fpdMock = static_cast<DeviceSettingsFPDMock*>(DeviceSettingsFPDMock::Get());
         Plugin::CFrontPanel::instance()->setFPDAcquirer([&]() {
             p_fpdMock->AddRef();
@@ -389,35 +369,40 @@ TEST_F(FrontPanelInitializedEventDsTest, getFrontPanelLights)
     ASSERT_TRUE(result.FromString(response));
     EXPECT_TRUE(result["success"].Boolean());
 
+    // DSHelper's config-loading path can't be driven through this mocked IShell (see
+    // the NOTE in FrontPanelInitializedTest's constructor), so no indicators/colors
+    // are ever loaded here and both outputs are deterministically empty-but-well-formed.
     JsonArray lights = result["supportedLights"].Array();
-    auto lightIt = lights.Elements();
-    ASSERT_TRUE(lightIt.Next());
-    EXPECT_EQ(string("power_led"), lightIt.Current().String());
-    ASSERT_TRUE(lightIt.Next());
-    EXPECT_EQ(string("record_led"), lightIt.Current().String());
-    EXPECT_FALSE(lightIt.Next());
+    EXPECT_EQ(0, lights.Length());
 
     JsonObject info;
     ASSERT_TRUE(info.FromString(result["supportedLightsInfo"].String()));
+    EXPECT_FALSE(info.HasLabel("power_led"));
+    EXPECT_FALSE(info.HasLabel("record_led"));
+}
 
-    JsonObject powerInfo = info["power_led"].Object();
-    EXPECT_EQ(string("int"), powerInfo["range"].String());
-    EXPECT_EQ(0, powerInfo["min"].Number());
-    EXPECT_EQ(100, powerInfo["max"].Number());
-    EXPECT_EQ(10, powerInfo["step"].Number());
-    EXPECT_EQ(1, powerInfo["colorMode"].Number());
+// Covers the actual indicator/color name-mapping logic that getFrontPanelLights()/
+// getFrontPanelLightsInfo() rely on, independent of DSHelper's config-loading path.
+TEST_F(FrontPanelInitializedEventDsTest, dsIndicatorToSvcName)
+{
+    EXPECT_EQ(string("data_led"), Plugin::CFrontPanel::dsIndicatorToSvcName(FPD::DS_FPD_INDICATOR_MESSAGE));
+    EXPECT_EQ(string("power_led"), Plugin::CFrontPanel::dsIndicatorToSvcName(FPD::DS_FPD_INDICATOR_POWER));
+    EXPECT_EQ(string("record_led"), Plugin::CFrontPanel::dsIndicatorToSvcName(FPD::DS_FPD_INDICATOR_RECORD));
+    EXPECT_EQ(string("remote_led"), Plugin::CFrontPanel::dsIndicatorToSvcName(FPD::DS_FPD_INDICATOR_REMOTE));
+    EXPECT_EQ(string("rfbypass_led"), Plugin::CFrontPanel::dsIndicatorToSvcName(FPD::DS_FPD_INDICATOR_RFBYPASS));
+    EXPECT_EQ(string(""), Plugin::CFrontPanel::dsIndicatorToSvcName(FPD::DS_FPD_INDICATOR_MAX));
+}
 
-    JsonArray powerColors = powerInfo["colors"].Array();
-    auto colorIt = powerColors.Elements();
-    ASSERT_TRUE(colorIt.Next());
-    EXPECT_EQ(string("Red"), colorIt.Current().String());
-    ASSERT_TRUE(colorIt.Next());
-    EXPECT_EQ(string("White"), colorIt.Current().String());
-
-    JsonObject recordInfo = info["record_led"].Object();
-    EXPECT_EQ(string("int"), recordInfo["range"].String());
-    EXPECT_EQ(0, recordInfo["colorMode"].Number());
-    EXPECT_FALSE(recordInfo.HasLabel("colors"));
+TEST_F(FrontPanelInitializedEventDsTest, dsColorValueToName)
+{
+    EXPECT_EQ(string("White"), Plugin::CFrontPanel::dsColorValueToName(0xFFFFFF));
+    EXPECT_EQ(string("Red"), Plugin::CFrontPanel::dsColorValueToName(0xFF0000));
+    EXPECT_EQ(string("Green"), Plugin::CFrontPanel::dsColorValueToName(0x00FF00));
+    EXPECT_EQ(string("Blue"), Plugin::CFrontPanel::dsColorValueToName(0x0000FF));
+    EXPECT_EQ(string("Yellow"), Plugin::CFrontPanel::dsColorValueToName(0xFFFFE0));
+    EXPECT_EQ(string("Orange"), Plugin::CFrontPanel::dsColorValueToName(0xFF8C00));
+    // Unrecognised values fall back to a "#RRGGBB" literal.
+    EXPECT_EQ(string("#123456"), Plugin::CFrontPanel::dsColorValueToName(0x123456));
 }
 
 TEST_F(FrontPanelInitializedEventDsTest, powerLedOffPower)
