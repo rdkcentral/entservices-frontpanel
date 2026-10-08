@@ -83,7 +83,7 @@ jobs:
         run: >
           sudo apt update
           &&
-          sudo apt install -y libsqlite3-dev libcurl4-openssl-dev valgrind gdb lcov clang libsystemd-dev libboost-all-dev libwebsocketpp-dev meson libcunit1 libcunit1-dev curl protobuf-compiler-grpc libgrpc-dev libgrpc++-dev
+          sudo apt install -y libsqlite3-dev libcurl4-openssl-dev valgrind lcov clang libsystemd-dev libboost-all-dev libwebsocketpp-dev meson libcunit1 libcunit1-dev curl protobuf-compiler-grpc libgrpc-dev libgrpc++-dev
 
       - name: Install GStreamer
         run: |
@@ -201,12 +201,6 @@ jobs:
           &&
           cmake --install build/entservices-apis
 
-      - name: Copy DeviceSettings interface headers
-        # entservices-apis does not install apis/DeviceSettings/*.h under interfaces/ on its own.
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/install/usr/include/WPEFramework/interfaces"
-          find "$GITHUB_WORKSPACE/entservices-apis/apis/DeviceSettings" -name "IDeviceSettings*.h" -exec cp {} "$GITHUB_WORKSPACE/install/usr/include/WPEFramework/interfaces/" \; 2>/dev/null || true
-
       - name: Generate external headers
         # Empty headers to mute errors
         run: >
@@ -215,7 +209,6 @@ jobs:
           mkdir -p
           headers
           headers/audiocapturemgr
-          headers/rdk/ds
           headers/rdk/iarmbus
           headers/rdk/iarmmgrs-hal
           headers/rdk/halif/
@@ -229,30 +222,6 @@ jobs:
           touch
           audiocapturemgr/audiocapturemgr_iarm.h
           ccec/drivers/CecIARMBusMgr.h
-          rdk/ds/audioOutputPort.hpp
-          rdk/ds/compositeIn.hpp
-          rdk/ds/dsDisplay.h
-          rdk/ds/dsError.h
-          rdk/ds/dsMgr.h
-          rdk/ds/dsTypes.h
-          rdk/ds/dsUtl.h
-          rdk/ds/exception.hpp
-          rdk/ds/hdmiIn.hpp
-          rdk/ds/host.hpp
-          rdk/ds/list.hpp
-          rdk/ds/manager.hpp
-          rdk/ds/sleepMode.hpp
-          rdk/ds/videoDevice.hpp
-          rdk/ds/videoOutputPort.hpp
-          rdk/ds/videoOutputPortConfig.hpp
-          rdk/ds/videoOutputPortType.hpp
-          rdk/ds/videoResolution.hpp
-          rdk/ds/frontPanelIndicator.hpp
-          rdk/ds/frontPanelConfig.hpp
-          rdk/ds/frontPanelTextDisplay.hpp
-          rdk/ds/audioOutputPortType.hpp
-          rdk/ds/audioOutputPortConfig.hpp
-          rdk/ds/pixelResolution.hpp
           rdk/iarmbus/libIARM.h
           rdk/iarmbus/libIBus.h
           rdk/iarmbus/libIBusDaemon.h
@@ -268,7 +237,6 @@ jobs:
           telemetry_busmessage_sender.h
           maintenanceMGR.h
           pkg.h
-          edid-parser.hpp
           secure_wrapper.h
           wpa_ctrl.h
           proc/readproc.h
@@ -625,30 +593,13 @@ jobs:
           ls -l /dev/disk/by-id/usb-JetFlash_Transcend_16GB_UEUIRCXT-0
 
       - name: Run unit tests without valgrind
-        run: |
-          export PATH=$GITHUB_WORKSPACE/install/usr/bin:${PATH}
-          export LD_LIBRARY_PATH=$GITHUB_WORKSPACE/install/usr/lib:$GITHUB_WORKSPACE/install/usr/lib/wpeframework/plugins:${LD_LIBRARY_PATH}
-          export GTEST_OUTPUT="json:$(pwd)/rdkL1TestResults.json"
-          ulimit -c unlimited
-          # gdb holds the faulting process so the crash frame can still be unwound.
-          gdb -q --batch \
-            -ex "set pagination off" \
-            -ex "set confirm off" \
-            -ex "run" \
-            -ex "echo \n===== crashing thread =====\n" \
-            -ex "bt full" \
-            -ex "echo \n===== all threads =====\n" \
-            -ex "thread apply all bt full" \
-            --args RdkServicesL1Test 2>&1 | tee $GITHUB_WORKSPACE/gdb_l1.log
-          if [ -f "$(pwd)/rdkL1TestResults.json" ]; then
-            cp -rf $(pwd)/rdkL1TestResults.json $GITHUB_WORKSPACE/rdkL1TestResultsWithoutValgrind.json
-            rm -rf $(pwd)/rdkL1TestResults.json
-          fi
-          # gdb --batch exits 0 even when the inferior faults, so key off the signal report.
-          if grep -qE "Program received signal|SIGSEGV|SIGABRT|SIGBUS" $GITHUB_WORKSPACE/gdb_l1.log; then
-            echo "::error::L1 test crashed under gdb - see backtrace above"
-            exit 1
-          fi
+        run: >
+          PATH=$GITHUB_WORKSPACE/install/usr/bin:${PATH}
+          LD_LIBRARY_PATH=$GITHUB_WORKSPACE/install/usr/lib:$GITHUB_WORKSPACE/install/usr/lib/wpeframework/plugins:${LD_LIBRARY_PATH}
+          GTEST_OUTPUT="json:$(pwd)/rdkL1TestResults.json"
+          RdkServicesL1Test &&
+          cp -rf $(pwd)/rdkL1TestResults.json $GITHUB_WORKSPACE/rdkL1TestResultsWithoutValgrind.json &&
+          rm -rf $(pwd)/rdkL1TestResults.json
 
       - name: Run unit tests with valgrind
         if: ${{ !env.ACT }}
@@ -700,7 +651,6 @@ jobs:
           path: |
             coverage/
             valgrind_log
-            gdb_l1.log
             rdkL1TestResultsWithoutValgrind.json
             rdkL1TestResultsWithValgrind.json
           if-no-files-found: warn
