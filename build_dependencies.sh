@@ -89,6 +89,12 @@ cmake -G Ninja -S entservices-apis  -B build/entservices-apis \
 cmake --build build/entservices-apis --target install
 
 ############################
+# entservices-apis does not install apis/DeviceSettings/*.h under interfaces/ on its own.
+echo "copying DeviceSettings interface headers"
+mkdir -p "$GITHUB_WORKSPACE/install/usr/include/WPEFramework/interfaces"
+find "$GITHUB_WORKSPACE/entservices-apis/apis/DeviceSettings" -name "IDeviceSettings*.h" -exec cp {} "$GITHUB_WORKSPACE/install/usr/include/WPEFramework/interfaces/" \; 2>/dev/null || true
+
+############################
 # generating minimal mock headers
 cd $GITHUB_WORKSPACE/entservices-testframework/Tests
 mkdir -p headers

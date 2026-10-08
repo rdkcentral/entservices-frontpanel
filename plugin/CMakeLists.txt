@@ -33,6 +33,12 @@ add_library(${PLUGIN_IMPLEMENTATION} SHARED
         Module.cpp
         ../helpers/frontpanel.cpp)
 
+set_source_files_properties(
+        FrontPanel.cpp
+        FrontPanelImplementation.cpp
+        ../helpers/frontpanel.cpp
+    PROPERTIES COMPILE_FLAGS "-fexceptions")
+
 set_target_properties(${MODULE_NAME} PROPERTIES
         CXX_STANDARD 11
         CXX_STANDARD_REQUIRED YES)
@@ -40,41 +46,32 @@ set_target_properties(${MODULE_NAME} PROPERTIES
 set_target_properties(${PLUGIN_IMPLEMENTATION} PROPERTIES
         CXX_STANDARD 11
         CXX_STANDARD_REQUIRED YES)
-set_source_files_properties(FrontPanel.cpp FrontPanelImplementation.cpp ../helpers/frontpanel.cpp PROPERTIES COMPILE_FLAGS "-fexceptions")
-
-if (RDK_SERVICE_L2_TEST)
-   find_library(TESTMOCKLIB_LIBRARIES NAMES TestMocklib)
-   if (TESTMOCKLIB_LIBRARIES)
-       message ("linking mock libraries ${TESTMOCKLIB_LIBRARIES} library")
-       target_link_libraries(${PLUGIN_IMPLEMENTATION} PRIVATE ${TESTMOCKLIB_LIBRARIES})
-   else (TESTMOCKLIB_LIBRARIES)
-       message ("Require ${TESTMOCKLIB_LIBRARIES} library")
-   endif (TESTMOCKLIB_LIBRARIES)
-endif (RDK_SERVICES_L2_TEST)
 
 target_compile_definitions(${MODULE_NAME} PRIVATE MODULE_NAME=Plugin_${PLUGIN_NAME})
 target_compile_definitions(${PLUGIN_IMPLEMENTATION} PRIVATE MODULE_NAME=Plugin_${PLUGIN_NAME})
 
-find_package(DS)
-if (DS_FOUND)
-    find_package(IARMBus)
-    add_definitions(-DDS_FOUND)
-    target_include_directories(${MODULE_NAME} PRIVATE ${IARMBUS_INCLUDE_DIRS})
-    target_include_directories(${MODULE_NAME} PRIVATE ${DS_INCLUDE_DIRS})
-    target_include_directories(${MODULE_NAME} PRIVATE ../helpers)
-    target_link_libraries(${MODULE_NAME} PRIVATE ${NAMESPACE}Plugins::${NAMESPACE}Plugins ${IARMBUS_LIBRARIES} ${DS_LIBRARIES} ${NAMESPACE}::${NAMESPACE}Helpers)
-#    target_link_libraries(${MODULE_NAME} PRIVATE ${NAMESPACE}Plugins::${NAMESPACE}Plugins ${DS_LIBRARIES})
-    target_include_directories(${PLUGIN_IMPLEMENTATION} PRIVATE ${IARMBUS_INCLUDE_DIRS})
-    target_include_directories(${PLUGIN_IMPLEMENTATION} PRIVATE ${DS_INCLUDE_DIRS})
-    target_include_directories(${PLUGIN_IMPLEMENTATION} PRIVATE ../helpers)
-    target_link_libraries(${PLUGIN_IMPLEMENTATION} PRIVATE ${NAMESPACE}Plugins::${NAMESPACE}Plugins ${IARMBUS_LIBRARIES} ${DS_LIBRARIES} ${NAMESPACE}::${NAMESPACE}Helpers)
-else (DS_FOUND)
-    target_link_libraries(${MODULE_NAME} PRIVATE ${NAMESPACE}Plugins::${NAMESPACE}Plugins ${NAMESPACE}::${NAMESPACE}Helpers)
-    target_link_libraries(${PLUGIN_IMPLEMENTATION} PRIVATE ${NAMESPACE}Plugins::${NAMESPACE}Plugins ${NAMESPACE}::${NAMESPACE}Helpers)
-endif(DS_FOUND)
+find_package(${NAMESPACE}Definitions REQUIRED)
 
+target_include_directories(${MODULE_NAME} PRIVATE ../helpers)
+target_link_libraries(${MODULE_NAME} PRIVATE
+        ${NAMESPACE}Plugins::${NAMESPACE}Plugins
+        ${NAMESPACE}::${NAMESPACE}Helpers)
 
-#target_link_libraries(${MODULE_NAME} PRIVATE ${NAMESPACE}Plugins::${NAMESPACE}Plugins)
+target_include_directories(${PLUGIN_IMPLEMENTATION} PRIVATE ../helpers)
+target_link_libraries(${PLUGIN_IMPLEMENTATION} PRIVATE
+        ${NAMESPACE}Plugins::${NAMESPACE}Plugins
+        ${NAMESPACE}Definitions::${NAMESPACE}Definitions
+        ${NAMESPACE}::${NAMESPACE}Helpers)
+
+if (RDK_SERVICE_L2_TEST)
+    find_library(TESTMOCKLIB_LIBRARIES NAMES TestMocklib)
+    if (TESTMOCKLIB_LIBRARIES)
+        message("linking mock libraries ${TESTMOCKLIB_LIBRARIES} library")
+        target_link_libraries(${PLUGIN_IMPLEMENTATION} PRIVATE ${TESTMOCKLIB_LIBRARIES})
+    else()
+        message("Require ${TESTMOCKLIB_LIBRARIES} library")
+    endif()
+endif()
 
 install(TARGETS ${MODULE_NAME}
         DESTINATION lib/${STORAGE_DIRECTORY}/plugins)
