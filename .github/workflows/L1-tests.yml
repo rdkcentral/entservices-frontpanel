@@ -121,7 +121,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-testframework
           path: entservices-testframework
-          ref: feature/RDKEMW-25013_3
+          ref: 2.1.0
 
       - name: Checkout entservices-frontpanel
         if: ${{ inputs.caller_source == 'local' }}
