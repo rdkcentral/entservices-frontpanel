@@ -196,8 +196,9 @@ namespace WPEFramework
                         LOGWARN("Power LED Initializing is not set since we continue with bootloader patern");
 		    }
 
-		    if (powerStatus)
-                        device::FrontPanelIndicator::getInstance("Power").setState(true);
+		    LOGWARN("<<<< Commented out setFPSTATE >>>>>>");
+		    //if (powerStatus)
+                       // device::FrontPanelIndicator::getInstance("Power").setState(true);
 
                 }
                 catch (...)
