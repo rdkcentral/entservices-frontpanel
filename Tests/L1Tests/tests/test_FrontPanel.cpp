@@ -467,7 +467,7 @@ TEST_F(FrontPanelInitializedEventDsTest, powerLedOnFPDUnavailable)
 TEST_F(FrontPanelInitializedEventDsTest, setBlink)
 {
     // pattern[0]: brightness=50 (used as-is), red/green/blue=2/2/2 -> colorValue 0x020202 (131586).
-    EXPECT_CALL(*p_fpdMock, SetFPDColor(FPD::DS_FPD_INDICATOR_POWER, 131586u))
+    EXPECT_CALL(*p_fpdMock, SetFPDColor(FPD::DS_FPD_INDICATOR_POWER, 131586u, false))
         .Times(1)
         .WillOnce(::testing::Return(Core::ERROR_NONE));
     EXPECT_CALL(*p_fpdMock, SetFPDBrightness(FPD::DS_FPD_INDICATOR_POWER, 50, false))
@@ -481,7 +481,7 @@ TEST_F(FrontPanelInitializedEventDsTest, setBlink)
 TEST_F(FrontPanelInitializedEventDsTest, setLEDMode1)
 {
     // RGB path: red=green=blue=0 -> colorValue 0.
-    EXPECT_CALL(*p_fpdMock, SetFPDColor(FPD::DS_FPD_INDICATOR_POWER, 0u))
+    EXPECT_CALL(*p_fpdMock, SetFPDColor(FPD::DS_FPD_INDICATOR_POWER, 0u, true))
         .Times(1)
         .WillOnce(::testing::Return(Core::ERROR_NONE));
     EXPECT_CALL(*p_fpdMock, SetFPDBrightness(FPD::DS_FPD_INDICATOR_POWER, 50, false))
@@ -495,7 +495,7 @@ TEST_F(FrontPanelInitializedEventDsTest, setLEDMode1)
 TEST_F(FrontPanelInitializedEventDsTest, setLEDMode2)
 {
     // Named-color path: "red" -> 0xFF0000.
-    EXPECT_CALL(*p_fpdMock, SetFPDColor(FPD::DS_FPD_INDICATOR_POWER, 0xFF0000u))
+    EXPECT_CALL(*p_fpdMock, SetFPDColor(FPD::DS_FPD_INDICATOR_POWER, 0xFF0000u, false))
         .Times(1)
         .WillOnce(::testing::Return(Core::ERROR_NONE));
     EXPECT_CALL(*p_fpdMock, SetFPDBrightness(FPD::DS_FPD_INDICATOR_POWER, 50, false))

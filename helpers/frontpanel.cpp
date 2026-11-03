@@ -472,14 +472,14 @@ namespace WPEFramework
                         return false;
                     }
 
-                    success = (fpd->SetFPDColor(dsInd, colorValue) == Core::ERROR_NONE);
+                    success = (fpd->SetFPDColor(dsInd, colorValue, false) == Core::ERROR_NONE);
                 } else if (parameters.HasLabel("red")) {
                     uint32_t red = 0, green = 0, blue = 0;
                     getNumberParameter("red",   red);
                     getNumberParameter("green", green);
                     getNumberParameter("blue",  blue);
                     const auto rc = fpd->SetFPDColor(dsInd,
-                        ((red & 0xFFU) << 16) | ((green & 0xFFU) << 8) | (blue & 0xFFU));
+                        ((red & 0xFFU) << 16) | ((green & 0xFFU) << 8) | (blue & 0xFFU), true);
                     success = (rc == Core::ERROR_NONE);
                 }
                 // Apply brightness
@@ -596,11 +596,11 @@ namespace WPEFramework
             }
 
             if (blinkInfo.colorMode == 1) {
-                fpd->SetFPDColor(dsInd, blinkInfo.colorValue);
+                fpd->SetFPDColor(dsInd, blinkInfo.colorValue, false);
             } else if (blinkInfo.colorMode == 2) {
                 uint32_t colorValue = 0;
                 if (colorNameToValue(blinkInfo.colorName, colorValue))
-                    fpd->SetFPDColor(dsInd, colorValue);
+                    fpd->SetFPDColor(dsInd, colorValue, false);
                 else
                     LOGWARN("setBlinkLed: unsupported color '%s'", blinkInfo.colorName.c_str());
             }
