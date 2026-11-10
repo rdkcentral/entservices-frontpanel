@@ -28,15 +28,6 @@
 #include "FrontPanelMock.h"
 #include "PowerManagerMock.h"
 
-#define TEST_LOG(x, ...)                                                                                                                         \
-    fprintf(stderr, "\033[1;32m[%s:%d](%s)<PID:%d><TID:%d>" x "\n\033[0m", __FILE__, __LINE__, __FUNCTION__, getpid(), gettid(), ##__VA_ARGS__); \
-    fflush(stderr);
-#include "FrontPanelIndicatorMock.h"
-#include "FrontPanelTextDisplayMock.h"
-#include "FrontPanelConfigMock.h"
-#include "ColorMock.h"
-#include "IarmBusMock.h"
-
 #define JSON_TIMEOUT   (1000)
 #define TEST_LOG(x, ...) fprintf(stderr, "\033[1;32m[%s:%d](%s)<PID:%d><TID:%d>" x "\n\033[0m", __FILE__, __LINE__, __FUNCTION__, getpid(), gettid(), ##__VA_ARGS__); fflush(stderr);
 #define FRONTPANEL_CALLSIGN  _T("org.rdk.FrontPanel.1")
