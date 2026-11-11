@@ -22,7 +22,7 @@ set(PLUGIN_IMPLEMENTATION ${MODULE_NAME}Implementation)
 set(PLUGIN_FRONTPANEL_STARTUPORDER "" CACHE STRING "To configure startup order of FrontPanel plugin")
 
 find_package(${NAMESPACE}Plugins REQUIRED)
-find_package(${NAMESPACE}Helpers REQUIRED)
+find_package(${NAMESPACE}Helpers CONFIG REQUIRED)
 
 add_library(${MODULE_NAME} SHARED
         FrontPanel.cpp
